@@ -9,6 +9,7 @@ import uuid
 import threading
 from pathlib import Path
 from typing import Any
+from n0te_state import atomic_write_json
 
 
 STAGES = ["CREATE", "ARRANGE", "PRODUCE", "MIX", "MASTER", "FINISH"]
@@ -33,6 +34,7 @@ class ProjectStore:
         self.identity_path = state_dir / "project_identity.json"
         self.runtime_token = uuid.uuid4().hex
         self._identity_lock = threading.RLock()
+        self._song_state_lock = threading.RLock()
         for p in (self.song_dir, self.checkpoint_dir, self.decision_dir, self.discovery_dir, self.conversation_dir):
             p.mkdir(parents=True, exist_ok=True)
 
@@ -50,7 +52,7 @@ class ProjectStore:
         return {"version": 2, "active_unsaved": None}
 
     def _save_identity(self, value: dict[str, Any]) -> None:
-        self.identity_path.write_text(json.dumps(value, indent=2, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(self.identity_path, value)
 
     def _song_anchor(self, snapshot: dict[str, Any]) -> str:
         song = snapshot.get("song") or {}
@@ -80,7 +82,7 @@ class ProjectStore:
                 target = {}
             merged = dict(source)
             merged.update(target)  # Explicit saved-key state wins if it already exists.
-            target_song.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
+            atomic_write_json(target_song, merged)
             try:
                 source_song.unlink()
             except FileNotFoundError:
@@ -100,7 +102,7 @@ class ProjectStore:
                     data = json.loads(path.read_text(encoding="utf-8"))
                     if isinstance(data, dict):
                         data["song_key"] = target_key
-                        target.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+                        atomic_write_json(target, data)
                     else:
                         shutil.copy2(path, target)
                 except Exception:
@@ -112,7 +114,20 @@ class ProjectStore:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(data, dict) and data.get("song_key") == source_key:
                     data["song_key"] = target_key
-                    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+                    atomic_write_json(path, data)
+            except Exception:
+                continue
+
+        # Transactions remain in the global journal for chronological history,
+        # but ownership follows a proven unsaved -> Save As identity migration.
+        transaction_dir = self.state_dir / "transactions"
+        for path in transaction_dir.glob("*.json") if transaction_dir.exists() else []:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and data.get("song_key") == source_key:
+                    data["song_key"] = target_key
+                    data["ownership_migrated_from"] = source_key
+                    atomic_write_json(path, data)
             except Exception:
                 continue
 
@@ -127,16 +142,18 @@ class ProjectStore:
 
             if file_path:
                 target = self._saved_key(file_path)
-                continuity = bool(active and (
-                    str(active.get("runtime_token") or "") == self.runtime_token
-                    or (anchor and str(active.get("anchor") or "") == anchor)
-                    or (signature and str(active.get("last_signature") or "") == signature)
-                ))
+                # Process/runtime identity is not Set identity. Automatic Save As
+                # migration requires a stable Song/Set anchor observed on both
+                # sides; signatures may change on save and are not identity proof.
+                continuity = bool(active and anchor and active.get("anchor") and str(active.get("anchor")) == anchor)
                 if continuity and active and active.get("key") and active.get("key") != target:
                     # Saving an unsaved Set can change the set signature. Migrate only
                     # when we have continuity evidence, never from a stale unrelated Set.
                     self._migrate_key(str(active["key"]), target)
-                identity["active_unsaved"] = None
+                # Preserve an unrelated/unproven unsaved Set's ownership. It may
+                # become observable again; never assign its state to this path.
+                if continuity:
+                    identity["active_unsaved"] = None
                 identity["last_saved_key"] = target
                 identity["last_saved_path"] = os.path.abspath(os.path.expanduser(file_path))
                 identity["updated_at"] = time.time()
@@ -196,16 +213,17 @@ class ProjectStore:
         return default
 
     def save_song(self, snapshot: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
-        state = self.load_song(snapshot)
-        allowed = {"stage", "song_intent", "session_goal", "next_action", "do_not_work_on", "do_not_lose", "references", "key_center", "scale", "chord_map", "notes"}
-        for key, value in update.items():
-            if key in allowed:
-                state[key] = value
-        if state.get("stage") not in STAGES:
-            state["stage"] = "CREATE"
-        state["updated_at"] = time.time()
-        self.song_state_path(snapshot).write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
-        return state
+        with self._song_state_lock:
+            state = self.load_song(snapshot)
+            allowed = {"stage", "song_intent", "session_goal", "next_action", "do_not_work_on", "do_not_lose", "references", "key_center", "scale", "chord_map", "notes"}
+            for key, value in update.items():
+                if key in allowed:
+                    state[key] = value
+            if state.get("stage") not in STAGES:
+                state["stage"] = "CREATE"
+            state["updated_at"] = time.time()
+            atomic_write_json(self.song_state_path(snapshot), state)
+            return state
 
     def checkpoint(self, snapshot: dict[str, Any], song_state: dict[str, Any], context_status: dict[str, Any], library_summary: dict[str, Any], label: str = "") -> dict[str, Any]:
         key = self.song_key(snapshot)
@@ -214,7 +232,7 @@ class ProjectStore:
         d = self.checkpoint_dir / key
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{int(now)}_{_slug(label or 'checkpoint')}.json"
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(path, data)
         return {"path": str(path), **data}
 
     def list_checkpoints(self, snapshot: dict[str, Any], limit: int = 30) -> list[dict[str, Any]]:
@@ -251,7 +269,7 @@ class ProjectStore:
     def record_decision(self, snapshot: dict[str, Any], title: str, why: str, status: str = "accepted", source: str = "user+n0te", details: dict[str, Any] | None = None) -> dict[str, Any]:
         item = {"created_at": time.time(), "song_key": self.song_key(snapshot), "title": title, "why": why, "status": status, "source": source, "details": details or {}}
         path = self.decision_dir / f"{int(item['created_at']*1000)}_{_slug(title)}.json"
-        path.write_text(json.dumps(item, indent=2, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(path, item)
         item["path"] = str(path)
         return item
 
@@ -261,7 +279,7 @@ class ProjectStore:
         d.mkdir(parents=True, exist_ok=True)
         title = str((row["item"] or {}).get("title") or (row["item"] or {}).get("name") or "sound")
         path = d / f"{int(row['created_at']*1000)}_{_slug(title)}.json"
-        path.write_text(json.dumps(row, indent=2, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(path, row)
         row["path"] = str(path)
         return row
 
@@ -285,7 +303,7 @@ class ProjectStore:
         d = self.conversation_dir / row["song_key"]
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{int(row['created_at']*1000000)}_{role}.json"
-        path.write_text(json.dumps(row, indent=2, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(path, row)
         row["path"] = str(path)
         return row
 

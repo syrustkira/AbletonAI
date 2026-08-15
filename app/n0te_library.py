@@ -5,6 +5,8 @@ import re
 import time
 from pathlib import Path
 from typing import Any
+import threading
+from n0te_state import atomic_write_json
 
 
 CAPABILITIES = [
@@ -216,6 +218,7 @@ class LibraryIndex:
         self.state_dir = state_dir
         self.path = state_dir / "library" / "library_index.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
 
     def load(self) -> dict[str, Any]:
         try:
@@ -264,7 +267,8 @@ class LibraryIndex:
             "items": sorted(dedup.values(), key=lambda x: (str(x.get("kind")), str(x.get("name", "")).lower())),
             "errors": errors,
         }
-        self.path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        with self._lock:
+            atomic_write_json(self.path, payload)
         return payload
 
     def _kind(self, item: dict[str, Any]) -> str:
@@ -325,7 +329,8 @@ class LibraryIndex:
             item["enrichment_note"] = str(row.get("note") or "")
             updates += 1
         data["enriched_at"] = time.time()
-        self.path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        with self._lock:
+            atomic_write_json(self.path, data)
         return {"updated": updates, "total": len(data.get("items") or []), "enriched_at": data.get("enriched_at")}
 
     def enrichment_targets(self, limit: int = 240) -> list[dict[str, Any]]:

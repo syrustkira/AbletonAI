@@ -7,6 +7,7 @@ import time
 import threading
 from pathlib import Path
 from typing import Any
+from n0te_state import atomic_write_json
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -82,10 +83,10 @@ class ContextStore:
                 try:
                     shutil.copy2(self.local_path, backup)
                     if (not str(current.get("generated_for") or "").startswith("N0TE Ableton AI")) and not self.override_path.exists():
-                        self.override_path.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
+                        atomic_write_json(self.override_path, current)
                 except Exception:
                     pass
-            self.local_path.write_text(json.dumps(bundled, indent=2, ensure_ascii=False), encoding="utf-8")
+            atomic_write_json(self.local_path, bundled)
 
         meta.update({
             "managed_base_sha256": bundled_sha,
@@ -93,7 +94,7 @@ class ContextStore:
             "context_version": bundled.get("context_version") or bundled.get("generated_for") or "unknown",
             "updated_at": time.time(),
         })
-        self.meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(self.meta_path, meta)
         return self.local_path
 
     def load(self, sync_path: str | None = None) -> dict[str, Any]:
@@ -124,9 +125,9 @@ class ContextStore:
         if not isinstance(payload, dict):
             raise ValueError("Context pack must be a JSON object")
         self.context_dir.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
-        self.override_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        return self.load()
+        with self._lock:
+            atomic_write_json(self.override_path, payload)
+            return self.load()
 
     def clear_overrides(self) -> dict[str, Any]:
         try:
