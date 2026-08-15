@@ -40,10 +40,12 @@ class PluginSession:
   if old!=("","") and old!=(self.song_id,self.workspace_id):raise PermissionError("Reconnect cannot change Song/workspace binding")
   return features
 class IntegrationTier(str,Enum):DETECTED_UNSUPPORTED="DETECTED_UNSUPPORTED";GENERIC="GENERIC";ENHANCED="ENHANCED";DEEP="DEEP"
+class CompatibilityState(str,Enum):
+ VERIFIED="VERIFIED";ASSUMED_COMPATIBLE="ASSUMED_COMPATIBLE";NEEDS_REVALIDATION="NEEDS_REVALIDATION";KNOWN_INCOMPATIBLE="KNOWN_INCOMPATIBLE";UNAVAILABLE="UNAVAILABLE"
 @dataclass
 class HostCapabilityDescriptor:
- capability_id:str;supported:bool;integration_depth:IntegrationTier;runtime_state:ComponentState;implementation_id:str;evidence:str="UNKNOWN";reason:str="";last_verified:float=0;fallback_candidates:list[str]=field(default_factory=list);authority_requirements:set[str]=field(default_factory=set);host_extensions:dict[str,Any]=field(default_factory=dict)
- def usable(self):return self.supported and self.runtime_state in {ComponentState.READY,ComponentState.BUSY}
+ capability_id:str;supported:bool;integration_depth:IntegrationTier;runtime_state:ComponentState;implementation_id:str;evidence:str="UNKNOWN";reason:str="";last_verified:float=0;fallback_candidates:list[str]=field(default_factory=list);authority_requirements:set[str]=field(default_factory=set);host_extensions:dict[str,Any]=field(default_factory=dict);adapter_version:str="";host_family:str="";host_version:str="";platform:str="";architecture:str="";protocol_version:str="";compatibility:CompatibilityState=CompatibilityState.VERIFIED
+ def usable(self):return self.supported and self.runtime_state in {ComponentState.READY,ComponentState.BUSY} and self.compatibility in {CompatibilityState.VERIFIED,CompatibilityState.ASSUMED_COMPATIBLE}
 @dataclass
 class HostAdapterDescriptor:
  host:str;implementation_maturity:IntegrationTier;target_maturity:IntegrationTier=IntegrationTier.DEEP;capabilities:dict[str,HostCapabilityDescriptor]=field(default_factory=dict);host_extensions:set[str]=field(default_factory=set);adapter_state:ComponentState=ComponentState.READY;song_id:str="";workspace_id:str=""
@@ -57,7 +59,43 @@ class HostAdapterDescriptor:
   item=self.capabilities.get(capability_id);return item if item and item.usable() else None
  def mark_state(self,capability_id,state,reason=""):
   item=self.capabilities[capability_id];item.runtime_state=state;item.reason=reason
- def status(self):return {"host":self.host,"implementation_maturity":self.implementation_maturity.value,"target_maturity":self.target_maturity.value,"overall_health":self.overall_health.value,"adapter_state":self.adapter_state.value,"song_id":self.song_id,"workspace_id":self.workspace_id,"capabilities":{k:{"depth":v.integration_depth.value,"state":v.runtime_state.value,"supported":v.supported,"reason":v.reason} for k,v in sorted(self.capabilities.items())},"host_extensions":sorted(self.host_extensions)}
+ def status(self):return {"host":self.host,"implementation_maturity":self.implementation_maturity.value,"target_maturity":self.target_maturity.value,"overall_health":self.overall_health.value,"adapter_state":self.adapter_state.value,"summary":f"{self.host} integration is {self.implementation_maturity.value} with {sum(not x.usable() for x in self.capabilities.values())} degraded capabilities.","song_id":self.song_id,"workspace_id":self.workspace_id,"capabilities":{k:{"depth":v.integration_depth.value,"state":v.runtime_state.value,"compatibility":v.compatibility.value,"adapter_version":v.adapter_version,"host_version":v.host_version,"evidence":v.evidence,"last_verified":v.last_verified,"supported":v.supported,"reason":v.reason} for k,v in sorted(self.capabilities.items())},"host_extensions":sorted(self.host_extensions)}
+
+@dataclass(frozen=True)
+class CapabilityUpdate:
+ adapter_version:str;fixes:set[str]=field(default_factory=set);needs_revalidation:set[str]=field(default_factory=set);unchanged:set[str]=field(default_factory=set)
+
+class HostCompatibilityEngine:
+ """Applies host/adapter compatibility evidence to the smallest affected path."""
+ def host_updated(self,adapter:HostAdapterDescriptor,host_version:str,states:dict[str,CompatibilityState],reason="Host version changed"):
+  for capability_id,state in states.items():
+   item=adapter.capabilities.get(capability_id)
+   if not item:continue
+   item.host_version=host_version;item.compatibility=state;item.reason=reason
+   if state is CompatibilityState.NEEDS_REVALIDATION:item.runtime_state=ComponentState.RECOVERING
+   elif state in {CompatibilityState.KNOWN_INCOMPATIBLE,CompatibilityState.UNAVAILABLE}:item.runtime_state=ComponentState.UNAVAILABLE
+  return adapter.status()
+ def stage_adapter_update(self,adapter:HostAdapterDescriptor,update:CapabilityUpdate):
+  affected=update.fixes|update.needs_revalidation
+  for capability_id in affected:
+   item=adapter.capabilities.get(capability_id)
+   if item:
+    item.adapter_version=update.adapter_version;item.compatibility=CompatibilityState.NEEDS_REVALIDATION;item.runtime_state=ComponentState.RECOVERING;item.reason="Capability verification required after adapter update"
+  return {"adapter_version":update.adapter_version,"affected":sorted(affected),"unchanged":sorted(update.unchanged),"song_id":adapter.song_id}
+ def verify(self,adapter:HostAdapterDescriptor,capability_id:str,passed:bool,evidence:str,last_verified:float):
+  item=adapter.capabilities[capability_id];item.evidence=evidence;item.last_verified=last_verified
+  item.compatibility=CompatibilityState.VERIFIED if passed else CompatibilityState.KNOWN_INCOMPATIBLE
+  item.runtime_state=ComponentState.READY if passed else ComponentState.UNAVAILABLE
+  item.reason="" if passed else "Capability verification failed"
+
+class CapabilityCircuitBreaker:
+ def __init__(self,threshold=3):self.threshold=threshold;self.failures={}
+ def failure(self,adapter:HostAdapterDescriptor,capability_id:str,reason:str):
+  key=(adapter.host,capability_id);self.failures[key]=self.failures.get(key,0)+1
+  if self.failures[key]>=self.threshold:adapter.mark_state(capability_id,ComponentState.UNAVAILABLE,"Circuit open: "+reason)
+  return self.failures[key]>=self.threshold
+ def recover(self,adapter:HostAdapterDescriptor,capability_id:str):
+  self.failures.pop((adapter.host,capability_id),None);adapter.mark_state(capability_id,ComponentState.RECOVERING,"Capability verification pending")
 
 _DEPTH_RANK={tier:index for index,tier in enumerate(IntegrationTier)}
 

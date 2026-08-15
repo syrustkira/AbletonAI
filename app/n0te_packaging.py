@@ -2,7 +2,7 @@ from dataclasses import dataclass,field
 from enum import Enum
 class Component(str,Enum):CORE="CORE";STANDALONE="STANDALONE";ARK="ARK";ABLETON_ADAPTER="ABLETON_ADAPTER";VST3="VST3";AU="AU";AAX="AAX";CLAP="CLAP";LOCAL_AI="LOCAL_AI";OFFLINE_KNOWLEDGE="OFFLINE_KNOWLEDGE";CREATOR="CREATOR";OBS_ADAPTER="OBS_ADAPTER";CAMERA_COMPONENTS="CAMERA_COMPONENTS"
 @dataclass
-class ComponentManifest:id:Component;version:str;platforms:set[str];architectures:set[str];dependencies:set[Component]=field(default_factory=set);optional_dependencies:set[Component]=field(default_factory=set);files:dict[str,str]=field(default_factory=dict);restart_required:bool=False;in_use:bool=False;rollback_source:str="";preserve_user_data:bool=True
+class ComponentManifest:id:Component;version:str;platforms:set[str];architectures:set[str];dependencies:set[Component]=field(default_factory=set);optional_dependencies:set[Component]=field(default_factory=set);files:dict[str,str]=field(default_factory=dict);restart_required:bool=False;in_use:bool=False;rollback_source:str="";preserve_user_data:bool=True;capability_fixes:set[str]=field(default_factory=set);capability_revalidation:set[str]=field(default_factory=set);capabilities_unchanged:set[str]=field(default_factory=set)
 class PackagingPlanner:
  def __init__(self,manifests):self.items={m.id:m for m in manifests}
  def install(self,selected,platform,arch):
@@ -19,5 +19,5 @@ class PackagingPlanner:
   if blocked:raise RuntimeError("Loaded components cannot be overwritten: "+", ".join(blocked))
   missing=[x.value for x in selected if not self.items[x].rollback_source]
   if missing:raise RuntimeError("Rollback source required: "+", ".join(missing))
-  return {"operation":"UPDATE","components":[x.value for x in selected],"rollback":True}
+  return {"operation":"UPDATE","components":[x.value for x in selected],"rollback":True,"capability_changes":{x.value:{"fixes":sorted(self.items[x].capability_fixes),"needs_revalidation":sorted(self.items[x].capability_revalidation),"unchanged":sorted(self.items[x].capabilities_unchanged)} for x in selected}}
  def uninstall(self,selected):return {"operation":"UNINSTALL","components":[x.value for x in selected],"preserve_user_data":True}

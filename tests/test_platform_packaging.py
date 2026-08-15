@@ -47,10 +47,31 @@ class PlatformPackagingTests(unittest.TestCase):
   bridge={"automation_write":HostCapabilityDescriptor("automation_write",True,IntegrationTier.GENERIC,ComponentState.READY,"plugin_bridge")}
   plan=resolve_job_capabilities([HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities=deep),HostAdapterDescriptor("Bridge",IntegrationTier.GENERIC,capabilities=bridge)],["track_read","automation_write"])
   self.assertEqual([(x["capability"],x["implementation"]) for x in plan],[("track_read","ableton"),("automation_write","plugin_bridge")])
+ def test_host_update_changes_only_named_compatibility(self):
+  caps={name:HostCapabilityDescriptor(name,True,IntegrationTier.DEEP,ComponentState.READY,"ableton",host_version="12.3") for name in ("transport_read","midi_read","automation_write","routing_set_output")}
+  adapter=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities=caps,song_id="song")
+  HostCompatibilityEngine().host_updated(adapter,"12.4",{"automation_write":CompatibilityState.NEEDS_REVALIDATION,"routing_set_output":CompatibilityState.KNOWN_INCOMPATIBLE})
+  self.assertIsNotNone(adapter.resolve("transport_read"));self.assertIsNotNone(adapter.resolve("midi_read"));self.assertIsNone(adapter.resolve("automation_write"));self.assertIsNone(adapter.resolve("routing_set_output"))
+  self.assertEqual(adapter.song_id,"song");self.assertEqual(adapter.implementation_maturity,IntegrationTier.DEEP);self.assertIn("2 degraded capabilities",adapter.status()["summary"])
+ def test_adapter_update_revalidates_only_affected_capabilities(self):
+  caps={name:HostCapabilityDescriptor(name,True,IntegrationTier.DEEP,ComponentState.READY,"ableton",adapter_version="1.8.3") for name in ("transport_read","midi_read","automation_write","clip_envelope_modify")}
+  adapter=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities=caps,song_id="song")
+  engine=HostCompatibilityEngine();detail=engine.stage_adapter_update(adapter,CapabilityUpdate("1.8.4",{"automation_write","clip_envelope_modify"},unchanged={"transport_read","midi_read"}))
+  self.assertEqual(detail["affected"],["automation_write","clip_envelope_modify"]);self.assertIsNotNone(adapter.resolve("transport_read"));self.assertIsNotNone(adapter.resolve("midi_read"))
+  engine.verify(adapter,"automation_write",True,"probe passed",10);self.assertIsNotNone(adapter.resolve("automation_write"));self.assertEqual(adapter.song_id,"song")
+ def test_capability_circuit_breaker_does_not_quarantine_adapter(self):
+  caps={name:HostCapabilityDescriptor(name,True,IntegrationTier.DEEP,ComponentState.READY,"ableton") for name in ("transport_read","automation_write")};adapter=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities=caps)
+  breaker=CapabilityCircuitBreaker(2);self.assertFalse(breaker.failure(adapter,"automation_write","fault"));self.assertTrue(breaker.failure(adapter,"automation_write","fault"))
+  self.assertIsNone(adapter.resolve("automation_write"));self.assertIsNotNone(adapter.resolve("transport_read"));self.assertEqual(adapter.adapter_state,ComponentState.READY)
+  breaker.recover(adapter,"automation_write");self.assertEqual(adapter.capabilities["automation_write"].runtime_state,ComponentState.RECOVERING)
  def test_packaging_dependencies_in_use_and_rollback(self):
   core=ComponentManifest(Component.CORE,"1",{"mac"},{"arm64"},rollback_source="old")
   plugin=ComponentManifest(Component.VST3,"1",{"mac"},{"arm64"},{Component.CORE},rollback_source="old")
   p=PackagingPlanner([core,plugin]);self.assertEqual(p.install([Component.VST3],"mac","arm64")["components"],["CORE","VST3"]);self.assertTrue(p.uninstall([Component.CORE])["preserve_user_data"])
   plugin.in_use=True
   with self.assertRaises(RuntimeError):p.update([Component.VST3])
+ def test_update_plan_advertises_capability_specific_changes(self):
+  adapter=ComponentManifest(Component.ABLETON_ADAPTER,"1.8.4",{"mac"},{"arm64"},rollback_source="1.8.3",capability_fixes={"automation_write"},capabilities_unchanged={"transport_read","midi_read"})
+  detail=PackagingPlanner([adapter]).update([Component.ABLETON_ADAPTER])["capability_changes"]["ABLETON_ADAPTER"]
+  self.assertEqual(detail["fixes"],["automation_write"]);self.assertEqual(detail["unchanged"],["midi_read","transport_read"])
 if __name__=="__main__":unittest.main()
