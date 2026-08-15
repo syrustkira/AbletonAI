@@ -20,7 +20,7 @@
   <div class="card">
     <h2>Active provider</h2>
     <label>Provider</label>
-    <select id="provider" onchange="providerChanged()">
+    <select id="provider" onchange="providerChanged(false)">
       <option value="openai">OpenAI</option>
       <option value="gemini">Google Gemini</option>
       <option value="ollama">Ollama Local</option>
@@ -53,12 +53,11 @@ const presets={
   custom:{base:'',model:'',note:'Any OpenAI-compatible Chat Completions endpoint. Remote endpoints must use HTTPS; plain HTTP is restricted to localhost.'}
 };
 const $=x=>document.getElementById(x);
-let initial=true;
 function out(v,cls=''){ $('output').className=cls; $('output').textContent=typeof v==='string'?v:JSON.stringify(v,null,2); }
 async function call(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});return await r.json()}
-function providerChanged(force=false){const p=$('provider').value,c=presets[p];if(force||!$('base').value||initial)$('base').value=c.base;if(force||!$('model').value||initial)$('model').value=c.model;$('key').disabled=p==='ollama';$('key').placeholder=p==='ollama'?'not required':'leave blank to keep saved key';$('base').readOnly=p!=='custom';$('providerNote').textContent=c.note;initial=false}
+function providerChanged(preserveSaved=false){const p=$('provider').value,c=presets[p];if(!preserveSaved){$('base').value=c.base;$('model').value=c.model}else{if(!$('base').value)$('base').value=c.base;if(!$('model').value)$('model').value=c.model}$('key').disabled=p==='ollama';$('key').placeholder=p==='ollama'?'not required':'leave blank to keep saved key';$('base').readOnly=p!=='custom';$('providerNote').textContent=c.note}
 function body(){return {provider:$('provider').value,model:$('model').value.trim(),base_url:$('base').value.trim(),api_key:$('key').value.trim()}}
-async function load(){const d=await call('/status');if(!d.ok){out(d.error,'bad');return}const s=d.status||{};$('provider').value=s.provider||'openai';$('model').value=s.model||'';$('base').value=s.base_url||'';initial=false;providerChanged(false);out({provider:s.provider,model:s.model,base_url:s.base_url,key_configured:s.key_configured,paid_fallback_enabled:s.paid_fallback_enabled},s.key_configured?'good':'warn')}
+async function load(){const d=await call('/status');if(!d.ok){out(d.error,'bad');return}const s=d.status||{};$('provider').value=s.provider||'openai';$('model').value=s.model||'';$('base').value=s.base_url||'';providerChanged(true);out({provider:s.provider,model:s.model,base_url:s.base_url,key_configured:s.key_configured,paid_fallback_enabled:s.paid_fallback_enabled},s.key_configured?'good':'warn')}
 async function save(){out('Saving…');const d=await call('/save',body());$('key').value='';if(d.ok){out({saved:true,provider:d.status.provider,model:d.status.model,base_url:d.status.base_url,key_configured:d.status.key_configured,paid_fallback_enabled:d.status.paid_fallback_enabled},'good')}else out(d.error,'bad')}
 async function models(){out('Listing models…');const d=await call('/models',body());if(d.ok){out((d.models||[]).length?d.models:'No models returned.','good')}else out(d.error,'bad')}
 async function testProvider(){out('Testing provider…');const d=await call('/test',body());if(d.ok)out(d.result,'good');else out(d.error,'bad')}
