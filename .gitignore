@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.coverage
+htmlcov/
+.pytest_cache/
+.DS_Store
+*.log
+.env
+.env.*
+secrets.json
+api_key
+.n0te-import/
