@@ -277,6 +277,54 @@
       "ableton": "orchestrated context or not applicable",
       "n0te_role": "Production-aware EDL operations and aspect presets; renderer acceptance pending",
       "status": "implemented"
+    },
+    {
+      "feature": "Camera and motion core",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Portable untrusted motion mapping with safe target allowlist",
+      "status": "implemented"
+    },
+    {
+      "feature": "Stream Engine",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Mock-backed TEST/LIVE state and explicit GO LIVE authority; real backend pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Social publication lifecycle",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Revision-bound explicit user approval and receipt model",
+      "status": "implemented"
+    },
+    {
+      "feature": "Portable ARK graph",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Validated bounded realtime routing metadata; native backends pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Plugin Core IPC",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Protocol and feature negotiation preserving Song binding",
+      "status": "implemented"
+    },
+    {
+      "feature": "DAW Adapter contract",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Gate-1-authorized host-neutral contract; only Ableton real",
+      "status": "interface_only"
+    },
+    {
+      "feature": "Packaging planner",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Dependency, platform, rollback, in-use and data-preservation planning",
+      "status": "implemented"
+    },
+    {
+      "feature": "Chaos harness",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Cross-component authority/privacy/resilience regressions",
+      "status": "partially_implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",
