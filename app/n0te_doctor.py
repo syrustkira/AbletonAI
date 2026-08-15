@@ -5,6 +5,8 @@ import json
 import os
 import re
 import socket
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +28,12 @@ def remote_script_doctor(state: Path, home: Path | None = None) -> dict[str, Any
     except Exception:
         pass
     configured = str(manifest.get("ableton_user_library") or os.environ.get("ABLETON_USER_LIBRARY") or "").strip()
-    candidates = [Path(configured).expanduser()] if configured else []
-    candidates += [home / "Music/Ableton/User Library", home / "Documents/Ableton/User Library"]
-    user_library = next((p for p in candidates if p.exists()), candidates[0])
+    configured_path = Path(configured).expanduser() if configured else None
+    fallbacks = [home / "Music/Ableton/User Library", home / "Documents/Ableton/User Library"]
+    fallback_existing = next((path for path in fallbacks if path.exists()), None)
+    # A missing explicitly configured path remains the inspected/failed path;
+    # a default candidate must not silently make it look healthy.
+    user_library = configured_path or fallback_existing or fallbacks[0]
     remote = user_library / "Remote Scripts" / "Ableton_Live_MCP"
     required = [remote / "__init__.py", remote / "Ableton_Live_MCP" / "__init__.py", remote / "Ableton_Live_MCP" / "bridge.py"]
     missing = [str(p) for p in required if not p.is_file()]
@@ -42,20 +47,28 @@ def remote_script_doctor(state: Path, home: Path | None = None) -> dict[str, Any
             lines = latest_log.read_text(encoding="utf-8", errors="replace").splitlines()[-5000:]
             pattern = re.compile(r"Ableton_Live_MCP|RemoteScript|traceback|importerror|modulenotfound|syntaxerror", re.I)
             relevant = [line[-1000:] for line in lines if pattern.search(line)][-30:]
-            loaded_evidence = any("Ableton_Live_MCP" in line and not re.search(r"error|traceback|failed", line, re.I) for line in relevant)
+            if relevant:
+                latest = relevant[-1]
+                loaded_evidence = "Ableton_Live_MCP" in latest and not re.search(r"error|traceback|failed|exception|syntax", latest, re.I)
         except OSError:
             pass
     files_installed = remote.is_dir() and not missing and not nested_extra
     bridge_live = _probe(8765)
-    likely_mismatch = bool(configured and not remote.exists() and any((p / "Remote Scripts/Ableton_Live_MCP").exists() for p in candidates[1:]))
+    likely_mismatch = bool(configured_path and not configured_path.exists()) or bool(configured_path and not remote.exists() and any((p / "Remote Scripts/Ableton_Live_MCP").exists() for p in fallbacks))
     credential = bool(os.environ.get("OPENAI_API_KEY"))
     if not credential:
+        credential = bool((state / "api_key").is_file() and (state / "api_key").stat().st_size)
+    if not credential and sys.platform == "darwin":
         try:
-            credential = bool(json.loads((state / "secrets.json").read_text()).get("openai_api_key"))
+            cp = subprocess.run(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", "N0TE_Ableton_AI_OpenAI", "-w"], capture_output=True, text=True, timeout=3)
+            credential = cp.returncode == 0 and bool(cp.stdout.strip())
         except Exception:
             pass
     return {
         "manifest_path": str(manifest_path), "manifest_user_library": configured,
+        "configured_user_library": str(configured_path or ""), "configured_path_exists": bool(configured_path and configured_path.exists()),
+        "fallback_candidates": [str(path) for path in fallbacks], "fallback_existing": str(fallback_existing or ""),
+        "verified_user_library": str(user_library) if user_library.exists() else "",
         "user_library": str(user_library), "expected_remote_script": str(remote),
         "required_files": [str(p) for p in required], "missing_required_files": missing,
         "extra_nested_folder": nested_extra, "files_installed": files_installed,

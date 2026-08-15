@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from logging.handlers import RotatingFileHandler
 import os
 import re
@@ -326,6 +327,11 @@ def cleanup_proposals(now: float | None = None) -> None:
                 registry.pop(key, None)
 
 
+def _proposal_get(registry: dict[str, dict[str, Any]], proposal_id: str) -> dict[str, Any] | None:
+    with _proposal_lock:
+        return registry.get(proposal_id)
+
+
 def _all_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for device in devices:
@@ -383,7 +389,11 @@ def _same_action_value(current: dict[str, Any], intended: dict[str, Any]) -> boo
             return all(all(actual.get(nid, {}).get(k) == value for k, value in row.items() if k != "note_id") for nid, row in wanted.items())
         except Exception:
             return False
-    return bool(keys) and all(current.get(key) == intended.get(key) for key in keys)
+    def same(left: Any, right: Any) -> bool:
+        if isinstance(left, (int, float)) and not isinstance(left, bool) and isinstance(right, (int, float)) and not isinstance(right, bool):
+            return math.isclose(float(left), float(right), rel_tol=1e-6, abs_tol=1e-5)
+        return left == right
+    return bool(keys) and all(same(current.get(key), intended.get(key)) for key in keys)
 
 
 def recovery_conflicts(live_bridge, tx: dict[str, Any], snapshot: dict[str, Any]) -> list[str]:
@@ -422,7 +432,7 @@ def reresolve_transaction_tracks(tx: dict[str, Any], snapshot: dict[str, Any]) -
         if not match or not isinstance(match.get("index"), int):
             errors.append(f"track target {row['object_id']} is no longer resolvable")
             continue
-        for key in ("actions", "inverse_actions"):
+        for key in ("actions", "inverse_actions", "post_actions"):
             actions = tx.get(key) or []
             if position < len(actions) and is_track_targeted_action(actions[position]):
                 actions[position]["track_index"] = match["index"]
@@ -608,7 +618,7 @@ Use evidence_labels to distinguish Live-state fact, audio measurement, inference
 def apply_proposal(proposal_id: str) -> dict[str, Any]:
     with _mutation_lock:
         cleanup_proposals()
-        prop = proposals.get(proposal_id)
+        prop = _proposal_get(proposals, proposal_id)
         if not prop:
             raise LookupError("Unknown or expired proposal.")
         current = get_snapshot(force=True)
@@ -657,17 +667,38 @@ def apply_proposal(proposal_id: str) -> dict[str, Any]:
             if rollback_errors:
                 detail += " | rollback errors: " + "; ".join(rollback_errors)
             raise RuntimeError(detail)
-        invalidate_snapshot()
-        after = get_snapshot(force=True)
         props = current.get("song", {}).get("properties", {})
         tx = make_transaction(
             actions, inverses, expected, results,
             label=prop["reply"].get("decision_summary") or "N0TE edit",
             song_key=current_key, set_path=str(props.get("file_path") or ""),
             set_identity=str((current.get("song") or {}).get("id") or (current.get("song") or {}).get("object_id") or ""),
-            signature_after=str(after.get("set", {}).get("set_signature") or ""), targets=targets,
+            signature_after="", targets=targets,
         )
+        tx["post_actions"] = [dict(action) for action in actions]
+        tx["post_state_verified"] = False
+        # JOURNAL immediately after successful execution. Everything below is
+        # fallible best-effort enrichment and must not reopen an unjournaled
+        # success window if Live disconnects.
         path = save_transaction(STATE, tx)
+        verified_actions = []
+        for position, action in enumerate(actions):
+            try:
+                tx["post_actions"][position] = capture_inverse(bridge, action)
+                verified_actions.append(position)
+            except Exception as exc:
+                tx.setdefault("post_state_errors", []).append({"action_index": position, "error": type(exc).__name__})
+        tx["post_state_verified_actions"] = verified_actions
+        tx["post_state_verified"] = len(verified_actions) == len(actions)
+        if verified_actions:
+            tx["post_state_captured_at"] = time.time()
+        invalidate_snapshot()
+        try:
+            after = get_snapshot(force=True)
+            tx["set_signature_after"] = str(after.get("set", {}).get("set_signature") or "")
+        except Exception as exc:
+            tx["post_snapshot_error"] = type(exc).__name__
+        atomic_write_json(path, tx)
     projects.record_decision(
         current,
         title=prop["reply"].get("decision_summary") or "Applied N0TE change",
@@ -675,7 +706,9 @@ def apply_proposal(proposal_id: str) -> dict[str, Any]:
         status="accepted",
         details={"transaction": tx["id"], "actions": actions},
     )
-    prop["applied_tx"] = tx["id"]
+    with _proposal_lock:
+        if proposals.get(proposal_id) is prop:
+            prop["applied_tx"] = tx["id"]
     return {
         "ok": True, "transaction": tx["id"], "journal": str(path), "results": results,
         "review_prompt": "Applied and journaled. Listen/look at the result, then tell me what improved, what got worse, or what should stay. I have the exact recent change in context for the next message.",
@@ -696,6 +729,9 @@ def _undo_last_n0te_locked() -> dict[str, Any]:
         if any_tx:
             return {"ok": False, "message": "The latest N0TE transaction belongs to another or unverified Set. Cross-Set Undo is refused."}
         return {"ok": False, "message": "No unapplied N0TE transaction to undo for this Set."}
+    current_set_identity = str((snap.get("song") or {}).get("id") or (snap.get("song") or {}).get("object_id") or "")
+    if not tx.get("set_identity") or not current_set_identity or str(tx.get("set_identity")) != current_set_identity:
+        return {"ok": False, "message": "N0TE cannot prove this transaction belongs to the current Live Set session. Undo refused.", "recovery_required": True}
     if tx.get("transaction_type") == "experiment":
         created_id = tx.get("created_track_id")
         tracks = [t for t in snap.get("set", {}).get("tracks") or [] if isinstance(t, dict)]
@@ -717,7 +753,7 @@ def _undo_last_n0te_locked() -> dict[str, Any]:
         return {"ok": True, "transaction": tx["id"], "message": "N0TE experiment track removed; original was never altered."}
 
     unsafe = reresolve_transaction_tracks(tx, snap)
-    unsafe.extend(recovery_conflicts(bridge, tx, snap))
+    unsafe.extend(recovery_conflicts(bridge, {**tx, "actions": tx.get("post_actions") or tx.get("actions") or []}, snap))
     if unsafe:
         return {"ok": False, "message": "Unsafe N0TE recovery refused: " + "; ".join(unsafe), "recovery_required": True}
     results, errors = [], []
@@ -909,7 +945,7 @@ RULES:
 
 def build_simplify_experiment(proposal_id: str) -> dict[str, Any]:
     cleanup_proposals()
-    prop = simplify_proposals.get(proposal_id)
+    prop = _proposal_get(simplify_proposals, proposal_id)
     if not prop:
         raise LookupError("Unknown or expired simplification proposal.")
     before = get_snapshot(force=True)
@@ -1342,7 +1378,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(undo_last_n0te())
 
             if self.path == "/api/undo_live":
-                return self.send_json(native_undo())
+                with _mutation_lock:
+                    return self.send_json(native_undo())
 
             if self.path == "/api/refresh":
                 snap = get_snapshot(force=True)
@@ -1411,13 +1448,14 @@ class Handler(SimpleHTTPRequestHandler):
                 snap = get_snapshot(force=True)
                 result = analyze_simplification(snap)
                 pid = f"simp-{int(time.time()*1000)}"
-                simplify_proposals[pid] = {
-                    "created_at": time.time(),
-                    "signature": snap.get("set", {}).get("set_signature"),
-                    "song_key": projects.song_key(snap),
-                    "track_index": selected_track_index(snap),
-                    "result": result,
-                }
+                with _proposal_lock:
+                    simplify_proposals[pid] = {
+                        "created_at": time.time(),
+                        "signature": snap.get("set", {}).get("set_signature"),
+                        "song_key": projects.song_key(snap),
+                        "track_index": selected_track_index(snap),
+                        "result": result,
+                    }
                 return self.send_json({"ok": True, "proposal_id": pid, **result})
 
             if self.path == "/api/simplify/build":
@@ -1458,16 +1496,20 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True, "finish": finish_checklist(snap, projects.load_song(snap), preflight=preflight), "assets": assets})
 
             if self.path == "/api/health":
-                snap = get_snapshot(force=True)
                 config = load_config()
-                return self.send_json({
-                    "ok": True,
-                    "assets": asset_health(snap),
+                payload = {
+                    "ok": True, "ableton_online": False,
+                    "assets": {"assets": [], "missing": [], "external": [], "unavailable": True},
                     "context": context_store.status(config.get("context_sync_path") or ""),
                     "library": library.summary(),
-                    "engineer": engineer_status(snap),
                     "remote_script_doctor": remote_script_doctor(STATE),
-                })
+                }
+                try:
+                    snap = get_snapshot(force=True)
+                    payload.update({"ableton_online": True, "assets": asset_health(snap), "engineer": engineer_status(snap)})
+                except Exception as exc:
+                    payload["ableton_error"] = f"{type(exc).__name__}: {exc}"
+                return self.send_json(payload)
 
             if self.path == "/api/context/replace":
                 data = self.body_json()

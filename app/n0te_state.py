@@ -34,6 +34,16 @@ def atomic_write_json(path: Path, value: Any, *, mode: int | None = None) -> Non
             if mode is not None:
                 os.chmod(tmp, mode)
             os.replace(tmp, path)
+            # Persist the directory entry as well as file contents where the
+            # platform supports directory fsync (POSIX/macOS/Linux).
+            try:
+                directory_fd = os.open(path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            except OSError:
+                pass
         finally:
             try:
                 tmp.unlink()

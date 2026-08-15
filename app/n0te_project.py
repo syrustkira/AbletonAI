@@ -34,6 +34,7 @@ class ProjectStore:
         self.identity_path = state_dir / "project_identity.json"
         self.runtime_token = uuid.uuid4().hex
         self._identity_lock = threading.RLock()
+        self._song_state_lock = threading.RLock()
         for p in (self.song_dir, self.checkpoint_dir, self.decision_dir, self.discovery_dir, self.conversation_dir):
             p.mkdir(parents=True, exist_ok=True)
 
@@ -212,16 +213,17 @@ class ProjectStore:
         return default
 
     def save_song(self, snapshot: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
-        state = self.load_song(snapshot)
-        allowed = {"stage", "song_intent", "session_goal", "next_action", "do_not_work_on", "do_not_lose", "references", "key_center", "scale", "chord_map", "notes"}
-        for key, value in update.items():
-            if key in allowed:
-                state[key] = value
-        if state.get("stage") not in STAGES:
-            state["stage"] = "CREATE"
-        state["updated_at"] = time.time()
-        atomic_write_json(self.song_state_path(snapshot), state)
-        return state
+        with self._song_state_lock:
+            state = self.load_song(snapshot)
+            allowed = {"stage", "song_intent", "session_goal", "next_action", "do_not_work_on", "do_not_lose", "references", "key_center", "scale", "chord_map", "notes"}
+            for key, value in update.items():
+                if key in allowed:
+                    state[key] = value
+            if state.get("stage") not in STAGES:
+                state["stage"] = "CREATE"
+            state["updated_at"] = time.time()
+            atomic_write_json(self.song_state_path(snapshot), state)
+            return state
 
     def checkpoint(self, snapshot: dict[str, Any], song_state: dict[str, Any], context_status: dict[str, Any], library_summary: dict[str, Any], label: str = "") -> dict[str, Any]:
         key = self.song_key(snapshot)
