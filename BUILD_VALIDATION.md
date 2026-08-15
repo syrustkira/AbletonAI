@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **71 PASS** in the Gate 1 review-correction sweep
+- unit/regression/lifecycle tests: **73 PASS** in the Gate 1 review-correction sweep
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Python test coverage in final audit: **~52% overall**, with `n0te_server.py` at **~43%**; real-Live acceptance remains mandatory

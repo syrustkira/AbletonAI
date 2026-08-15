@@ -13,7 +13,7 @@ import io
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 
-from n0te_core import validate_action, capture_inverse, execute_action, make_transaction, save_transaction, latest_transaction, live_object_index
+from n0te_core import validate_action, capture_inverse, execute_action, make_transaction, save_transaction, latest_transaction, live_object_index, TRACK_TARGETED_KINDS
 from n0te_state import atomic_write_json
 from n0te_doctor import remote_script_doctor
 from n0te_library import LibraryIndex, capability_matches, current_set_devices
@@ -525,6 +525,49 @@ class ServerWorkflowTests(unittest.TestCase):
                 result = server.undo_last_n0te()
             self.assertTrue(result["ok"])
             self.assertEqual(bridge.names, {0: "Other", 1: "Kick"})
+
+    def test_all_track_index_mutations_have_one_canonical_classification(self):
+        self.assertEqual(TRACK_TARGETED_KINDS, {
+            "rename_track", "set_track_mute", "set_track_solo", "set_track_arm",
+            "set_track_pan", "set_track_volume", "set_send_level",
+        })
+
+    def test_send_level_apply_and_undo_reresolve_shifted_track_by_stable_id(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        class SendBridge:
+            def __init__(self): self.sends = {0: 0.2}
+            def request(self, method, params):
+                path = (params.get("ref") or {}).get("path", "")
+                if "mixer_device sends 0" in path:
+                    idx = int(path.split("tracks ", 1)[1].split()[0])
+                    if method == "get": return {"properties": {"value": self.sends[idx]}}
+                    if method == "parameter_set": self.sends[idx] = params["value"]; return {"ok": True}
+                raise AssertionError((method, params))
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); store = ProjectStore(root); bridge = SendBridge()
+            before = json.loads(json.dumps(SNAP))
+            forward = action("set_send_level", track_index=0, send_index=0, number_value=0.8)
+            proposal = {
+                "created_at": time.time(), "signature": "abc", "song_key": store.song_key(before),
+                "affected_targets": server.affected_target_evidence([forward], before),
+                "reply": {"message": "send", "decision_summary": "send", "actions": [forward]},
+            }
+            shifted = json.loads(json.dumps(before)); shifted["set"]["tracks"] = [
+                {"index": 0, "id": 99, "name": "Unrelated", "devices": [], "clips": [], "arrangement_clips": []},
+                {"index": 1, "id": 10, "name": "Kick", "devices": [], "clips": [], "arrangement_clips": []},
+                {"index": 2, "id": 11, "name": "Bass", "devices": [], "clips": [], "arrangement_clips": []},
+            ]
+            snapshots = [before, before, shifted]
+            with patch.object(server, "STATE", root), patch.object(server, "projects", store), patch.object(server, "bridge", bridge), patch.object(server, "proposals", {"p": proposal}), patch.object(server, "get_snapshot", side_effect=snapshots), patch.object(server, "invalidate_snapshot"):
+                applied = server.apply_proposal("p")
+                self.assertTrue(applied["ok"]); self.assertEqual(bridge.sends[0], 0.8)
+                # Simulate insertion: the unrelated Track inherits index 0 while
+                # stable Track id 10 and its current send move to index 1.
+                bridge.sends = {0: 0.1, 1: 0.8}
+                undone = server.undo_last_n0te()
+            self.assertTrue(undone["ok"])
+            self.assertEqual(bridge.sends, {0: 0.1, 1: 0.2})
 
     def test_atomic_json_concurrent_writers_never_corrupt(self):
         with tempfile.TemporaryDirectory() as td:

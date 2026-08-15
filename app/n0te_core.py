@@ -25,6 +25,23 @@ ALLOWED_KINDS = {
     "update_midi_clip_notes",
 }
 
+# The complete set of allowed mutations whose real target is a normal Track
+# addressed by the bridge through a volatile track_index. Keep ownership,
+# validation, Apply and Undo resolution based on this single definition.
+TRACK_TARGETED_KINDS = frozenset({
+    "rename_track",
+    "set_track_mute",
+    "set_track_solo",
+    "set_track_arm",
+    "set_track_pan",
+    "set_track_volume",
+    "set_send_level",
+})
+
+
+def is_track_targeted_action(action: dict[str, Any]) -> bool:
+    return action.get("kind") in TRACK_TARGETED_KINDS
+
 
 def live_object_index(snapshot: dict[str, Any]) -> dict[str, dict[int, dict[str, Any]]]:
     """Canonical recursive index for exposed tracks, Rack devices and clips."""
@@ -135,7 +152,7 @@ def validate_action(action: dict[str, Any], snapshot: dict[str, Any]) -> tuple[b
     master = snapshot.get("set", {}).get("master_track")
     if isinstance(master, dict):
         all_tracks.append(master)
-    if kind.startswith("set_track_") or kind == "rename_track" or kind == "set_send_level":
+    if is_track_targeted_action(action):
         idx = action.get("track_index")
         if not isinstance(idx, int) or idx not in valid_track_indices:
             return False, f"Invalid track index {idx}"

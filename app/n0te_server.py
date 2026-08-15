@@ -33,6 +33,7 @@ from n0te_core import (
     make_transaction,
     save_transaction,
     validate_action,
+    is_track_targeted_action,
 )
 from n0te_library import LibraryIndex, current_set_devices, resolve_tools
 from n0te_discovery import discover, extract_discovery_intent
@@ -349,7 +350,7 @@ def affected_target_evidence(actions: list[dict[str, Any]], snapshot: dict[str, 
         row: dict[str, Any] = {"kind": action.get("kind"), "target_id": action.get("target_id")}
         idx = action.get("track_index")
         track = next((t for t in tracks if t.get("index") == idx), None)
-        if track and str(action.get("kind", "")).startswith(("set_track_", "rename_track")):
+        if track and is_track_targeted_action(action):
             row.update({"object_type": "track", "object_id": track.get("id"), "track_index": idx, "name_before": track.get("name")})
         target_id = action.get("target_id")
         if target_id:
@@ -394,7 +395,12 @@ def recovery_conflicts(live_bridge, tx: dict[str, Any], snapshot: dict[str, Any]
             match = next((t for t in tracks if t.get("id") == row.get("object_id")), None)
             if not match:
                 errors.append(f"track target {row.get('object_id')} no longer matches")
-    for action in tx.get("actions") or []:
+    for position, action in enumerate(tx.get("actions") or []):
+        if is_track_targeted_action(action):
+            row = evidence[position] if position < len(evidence) else {}
+            if row.get("object_type") != "track" or row.get("object_id") is None:
+                errors.append(f"track ownership evidence missing for {action.get('kind')}")
+                continue
         try:
             current = capture_inverse(live_bridge, action)
             if not _same_action_value(current, action):
@@ -418,7 +424,7 @@ def reresolve_transaction_tracks(tx: dict[str, Any], snapshot: dict[str, Any]) -
             continue
         for key in ("actions", "inverse_actions"):
             actions = tx.get(key) or []
-            if position < len(actions) and str(actions[position].get("kind", "")).startswith(("set_track_", "rename_track")):
+            if position < len(actions) and is_track_targeted_action(actions[position]):
                 actions[position]["track_index"] = match["index"]
         row["track_index"] = match["index"]
     return errors
@@ -623,7 +629,7 @@ def apply_proposal(proposal_id: str) -> dict[str, Any]:
         current_tracks = current.get("set", {}).get("tracks") or []
         for position, action in enumerate(actions):
             evidence = proposed_targets[position] if position < len(proposed_targets) else {}
-            if evidence.get("object_type") == "track" and evidence.get("object_id") is not None:
+            if is_track_targeted_action(action) and evidence.get("object_type") == "track" and evidence.get("object_id") is not None:
                 match = next((t for t in current_tracks if t.get("id") == evidence["object_id"]), None)
                 if not match or not isinstance(match.get("index"), int):
                     raise ConflictError(f"Approved track target {evidence['object_id']} is no longer resolvable.")
