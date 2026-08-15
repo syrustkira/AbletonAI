@@ -42,13 +42,13 @@
   <div class="card">
     <h2>Status</h2>
     <pre id="output">Loading…</pre>
-    <div class="note">Testing makes one small inference call. Ollama stays local. Cloud-provider tests use that provider's normal quota/billing rules.</div>
+    <div class="note">Testing makes one small inference call. Ollama stays local. Cloud-provider tests use that provider's normal quota/billing rules. To guarantee $0 Gemini billing, use an AI Studio project that remains on the API Free Tier.</div>
   </div>
 </div>
 <script>
 const presets={
   openai:{base:'https://api.openai.com/v1',model:'gpt-5.6',note:'Uses your existing OpenAI key. This can incur API charges if that project has paid quota.'},
-  gemini:{base:'https://generativelanguage.googleapis.com/v1beta/openai',model:'gemini-3.6-flash',note:'Uses a Gemini API key from Google AI Studio. Gemini API Free Tier is separate from Gemini app / Google AI subscription limits.'},
+  gemini:{base:'https://generativelanguage.googleapis.com/v1beta/openai',model:'gemini-3.5-flash',note:'Uses a Gemini API key from Google AI Studio. Gemini 3.5 Flash is listed as free of charge on the Gemini API Free Tier. The API tier is separate from Gemini app / Google AI subscription limits.'},
   ollama:{base:'http://127.0.0.1:11434/v1',model:'',note:'Runs through local Ollama. No API key is required and N0TE does not send the prompt to a cloud provider.'},
   custom:{base:'',model:'',note:'Any OpenAI-compatible Chat Completions endpoint. Remote endpoints must use HTTPS; plain HTTP is restricted to localhost.'}
 };
