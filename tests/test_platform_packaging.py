@@ -16,8 +16,29 @@ class PlatformPackagingTests(unittest.TestCase):
   with self.assertRaises(PermissionError):s.reconnect(PluginHandshake(ProtocolVersion(1,1),{"tap"},"other","ws"))
   self.assertEqual(PluginSession(ProtocolVersion(1,0),set()).negotiate(PluginHandshake(ProtocolVersion(2,0),set(),"s","w")),set())
  def test_daw_mutation_contract_requires_gate1(self):
-  with self.assertRaises(PermissionError):execute_authorized(Adapter(),{},None)
-  self.assertTrue(execute_authorized(Adapter(),{}, {"approved":True,"revalidated":True})["ok"])
+  verified=HostCapabilityDescriptor("midi_modify",True,IntegrationTier.DEEP,ComponentState.READY,"ableton")
+  with self.assertRaises(PermissionError):execute_authorized(Adapter(),{},None,verified)
+  with self.assertRaises(PermissionError):execute_authorized(Adapter(),{}, {"approved":True,"revalidated":True})
+  self.assertTrue(execute_authorized(Adapter(),{}, {"approved":True,"revalidated":True},verified)["ok"])
+ def test_assumed_reads_are_eligible_but_mutations_are_not(self):
+  assumed=HostCapabilityDescriptor("cap",True,IntegrationTier.DEEP,ComponentState.READY,"ableton",compatibility=CompatibilityState.ASSUMED_COMPATIBLE)
+  adapter=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities={"cap":assumed})
+  self.assertIsNotNone(adapter.resolve("cap",OperationRisk.READ));self.assertIsNotNone(adapter.resolve("cap",OperationRisk.OBSERVE));self.assertIsNone(adapter.resolve("cap",OperationRisk.MUTATE))
+  self.assertEqual(resolve_job_capabilities([adapter],[CapabilityRequirement("cap",OperationRisk.MUTATE)])[0]["method"],"GUIDED_MANUAL")
+ def test_mutation_prefers_verified_fallback_over_assumed_deep(self):
+  assumed=HostCapabilityDescriptor("automation_write",True,IntegrationTier.DEEP,ComponentState.READY,"ableton",compatibility=CompatibilityState.ASSUMED_COMPATIBLE)
+  verified=HostCapabilityDescriptor("automation_write",True,IntegrationTier.GENERIC,ComponentState.READY,"bridge",compatibility=CompatibilityState.VERIFIED)
+  plan=resolve_job_capabilities([HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities={"automation_write":assumed}),HostAdapterDescriptor("Bridge",IntegrationTier.GENERIC,capabilities={"automation_write":verified})],[CapabilityRequirement("automation_write",OperationRisk.MUTATE)])
+  self.assertEqual(plan[0]["implementation"],"bridge");self.assertTrue(plan[0]["requires_gate1"])
+ def test_only_explicit_nonmutating_probe_can_verify_mutation(self):
+  assumed=HostCapabilityDescriptor("automation_write",True,IntegrationTier.DEEP,ComponentState.READY,"ableton",compatibility=CompatibilityState.ASSUMED_COMPATIBLE)
+  adapter=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities={"automation_write":assumed})
+  def unsafe(_):return True,"bad",1
+  with self.assertRaises(PermissionError):resolve_job_capabilities([adapter],[CapabilityRequirement("automation_write",OperationRisk.MUTATE)],{"automation_write":unsafe})
+  def safe(_):return True,"read-only protocol probe",2
+  safe.non_mutating=True
+  plan=resolve_job_capabilities([adapter],[CapabilityRequirement("automation_write",OperationRisk.MUTATE)],{"automation_write":safe})
+  self.assertEqual(plan[0]["method"],"AUTOMATIC");self.assertEqual(assumed.compatibility,CompatibilityState.VERIFIED)
  def test_every_supported_host_targets_deep_without_fake_current_support(self):
   fixtures=[HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,host_extensions={"SessionClip"}),HostAdapterDescriptor("Logic",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("FL Studio",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("Pro Tools",IntegrationTier.DETECTED_UNSUPPORTED)]
   self.assertTrue(all(x.target_maturity is IntegrationTier.DEEP for x in fixtures));self.assertEqual(fixtures[1].implementation_maturity,IntegrationTier.DETECTED_UNSUPPORTED);self.assertIn("SessionClip",fixtures[0].status()["host_extensions"])

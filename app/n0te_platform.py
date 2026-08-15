@@ -42,10 +42,16 @@ class PluginSession:
 class IntegrationTier(str,Enum):DETECTED_UNSUPPORTED="DETECTED_UNSUPPORTED";GENERIC="GENERIC";ENHANCED="ENHANCED";DEEP="DEEP"
 class CompatibilityState(str,Enum):
  VERIFIED="VERIFIED";ASSUMED_COMPATIBLE="ASSUMED_COMPATIBLE";NEEDS_REVALIDATION="NEEDS_REVALIDATION";KNOWN_INCOMPATIBLE="KNOWN_INCOMPATIBLE";UNAVAILABLE="UNAVAILABLE"
+class OperationRisk(str,Enum):READ="READ";OBSERVE="OBSERVE";MUTATE="MUTATE"
+@dataclass(frozen=True)
+class CapabilityRequirement:capability_id:str;risk:OperationRisk=OperationRisk.OBSERVE
 @dataclass
 class HostCapabilityDescriptor:
  capability_id:str;supported:bool;integration_depth:IntegrationTier;runtime_state:ComponentState;implementation_id:str;evidence:str="UNKNOWN";reason:str="";last_verified:float=0;fallback_candidates:list[str]=field(default_factory=list);authority_requirements:set[str]=field(default_factory=set);host_extensions:dict[str,Any]=field(default_factory=dict);adapter_version:str="";host_family:str="";host_version:str="";platform:str="";architecture:str="";protocol_version:str="";compatibility:CompatibilityState=CompatibilityState.VERIFIED
- def usable(self):return self.supported and self.runtime_state in {ComponentState.READY,ComponentState.BUSY} and self.compatibility in {CompatibilityState.VERIFIED,CompatibilityState.ASSUMED_COMPATIBLE}
+ def eligible(self,risk=OperationRisk.OBSERVE):
+  compatible={CompatibilityState.VERIFIED} if risk is OperationRisk.MUTATE else {CompatibilityState.VERIFIED,CompatibilityState.ASSUMED_COMPATIBLE}
+  return self.supported and self.runtime_state in {ComponentState.READY,ComponentState.BUSY} and self.compatibility in compatible
+ def usable(self):return self.eligible(OperationRisk.OBSERVE)
 @dataclass
 class HostAdapterDescriptor:
  host:str;implementation_maturity:IntegrationTier;target_maturity:IntegrationTier=IntegrationTier.DEEP;capabilities:dict[str,HostCapabilityDescriptor]=field(default_factory=dict);host_extensions:set[str]=field(default_factory=set);adapter_state:ComponentState=ComponentState.READY;song_id:str="";workspace_id:str=""
@@ -55,8 +61,8 @@ class HostAdapterDescriptor:
   useful=[x for x in self.capabilities.values() if x.usable()]
   if not useful:return ComponentState.UNAVAILABLE if self.capabilities else self.adapter_state
   return ComponentState.DEGRADED if any(x.runtime_state in {ComponentState.DEGRADED,ComponentState.UNAVAILABLE,ComponentState.RECOVERING} for x in self.capabilities.values()) else self.adapter_state
- def resolve(self,capability_id):
-  item=self.capabilities.get(capability_id);return item if item and item.usable() else None
+ def resolve(self,capability_id,risk=OperationRisk.OBSERVE):
+  item=self.capabilities.get(capability_id);return item if item and item.eligible(risk) else None
  def mark_state(self,capability_id,state,reason=""):
   item=self.capabilities[capability_id];item.runtime_state=state;item.reason=reason
  def status(self):return {"host":self.host,"implementation_maturity":self.implementation_maturity.value,"target_maturity":self.target_maturity.value,"overall_health":self.overall_health.value,"adapter_state":self.adapter_state.value,"summary":f"{self.host} integration is {self.implementation_maturity.value} with {sum(not x.usable() for x in self.capabilities.values())} degraded capabilities.","song_id":self.song_id,"workspace_id":self.workspace_id,"capabilities":{k:{"depth":v.integration_depth.value,"state":v.runtime_state.value,"compatibility":v.compatibility.value,"adapter_version":v.adapter_version,"host_version":v.host_version,"evidence":v.evidence,"last_verified":v.last_verified,"supported":v.supported,"reason":v.reason} for k,v in sorted(self.capabilities.items())},"host_extensions":sorted(self.host_extensions)}
@@ -87,6 +93,9 @@ class HostCompatibilityEngine:
   item.compatibility=CompatibilityState.VERIFIED if passed else CompatibilityState.KNOWN_INCOMPATIBLE
   item.runtime_state=ComponentState.READY if passed else ComponentState.UNAVAILABLE
   item.reason="" if passed else "Capability verification failed"
+ def safe_probe(self,adapter:HostAdapterDescriptor,capability_id:str,probe):
+  if not getattr(probe,"non_mutating",False):raise PermissionError("Compatibility probes must be explicitly non-mutating")
+  passed,evidence,last_verified=probe(adapter.capabilities[capability_id]);self.verify(adapter,capability_id,passed,evidence,last_verified);return passed
 
 class CapabilityCircuitBreaker:
  def __init__(self,threshold=3):self.threshold=threshold;self.failures={}
@@ -99,26 +108,31 @@ class CapabilityCircuitBreaker:
 
 _DEPTH_RANK={tier:index for index,tier in enumerate(IntegrationTier)}
 
-def resolve_job_capabilities(adapters:list[HostAdapterDescriptor],required:list[str]):
+def resolve_job_capabilities(adapters:list[HostAdapterDescriptor],required,probes=None):
  """Resolve each job requirement independently; aggregate adapter health is not a gate."""
+ probes=probes or {}
  steps=[]
- for capability_id in required:
+ for requirement in required:
+  requirement=requirement if isinstance(requirement,CapabilityRequirement) else CapabilityRequirement(requirement)
+  capability_id,risk=requirement.capability_id,requirement.risk
   candidates=[]
   failed=[]
   for adapter in adapters:
    descriptor=adapter.capabilities.get(capability_id)
-   if descriptor and descriptor.usable() and adapter.adapter_state not in {ComponentState.OFF,ComponentState.UNAVAILABLE}:
+   if descriptor and risk is OperationRisk.MUTATE and descriptor.compatibility is CompatibilityState.ASSUMED_COMPATIBLE and capability_id in probes:
+    HostCompatibilityEngine().safe_probe(adapter,capability_id,probes[capability_id])
+   if descriptor and descriptor.eligible(risk) and adapter.adapter_state not in {ComponentState.OFF,ComponentState.UNAVAILABLE}:
     candidates.append((_DEPTH_RANK[descriptor.integration_depth],descriptor.last_verified,adapter.host,descriptor))
    elif descriptor:
     failed.append(descriptor)
   if candidates:
    _,_,host,item=max(candidates,key=lambda value:(value[0],value[1],value[2]))
-   steps.append({"capability":capability_id,"method":"AUTOMATIC","implementation":item.implementation_id,"host":host,"depth":item.integration_depth.value})
+   steps.append({"capability":capability_id,"risk":risk.value,"method":"AUTOMATIC","implementation":item.implementation_id,"host":host,"depth":item.integration_depth.value,"compatibility":item.compatibility.value,"requires_gate1":risk is OperationRisk.MUTATE})
   else:
    fallback=[]
    for item in failed:
     fallback.extend(candidate for candidate in item.fallback_candidates if candidate not in fallback)
-   steps.append({"capability":capability_id,"method":"GUIDED_MANUAL","fallback_candidates":fallback,"reason":failed[0].reason if failed else "unsupported"})
+   steps.append({"capability":capability_id,"risk":risk.value,"method":"GUIDED_MANUAL","fallback_candidates":fallback,"reason":failed[0].reason if failed else "unsupported"})
  return steps
 
 def plan_job_capabilities(adapter:HostAdapterDescriptor,required:list[str]):
@@ -138,8 +152,9 @@ class DAWAdapter(Protocol):
  def validate_action(self,action)->tuple[bool,str]:...
  def execute_action(self,action,authorization)->dict:...
  def observe_action(self,action)->dict:...
-def execute_authorized(adapter,action,gate1_authorization):
+def execute_authorized(adapter,action,gate1_authorization,capability=None):
  if not gate1_authorization or not gate1_authorization.get("approved") or not gate1_authorization.get("revalidated"):raise PermissionError("Gate 1 authorization required")
+ if capability is None or not capability.eligible(OperationRisk.MUTATE):raise PermissionError("Verified implementation compatibility required for mutation")
  ok,reason=adapter.validate_action(action)
  if not ok:raise ValueError(reason)
  return adapter.execute_action(action,gate1_authorization)
