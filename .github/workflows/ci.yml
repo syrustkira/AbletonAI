@@ -1,0 +1,64 @@
+name: N0TE canonical validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Python tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Compile Python
+        run: python3 -m compileall -q app INSTALL_N0TE_ABLETON_AI.py
+
+      - name: Validate shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n INSTALL_N0TE_MAC.command
+          bash -n START_N0TE_ABLETON_AI.command
+          bash -n UNINSTALL_N0TE_ABLETON_AI.command
+
+      - name: Validate JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m json.tool VERSION.json >/dev/null
+          python3 -m json.tool FEATURE_MATRIX.json >/dev/null
+          python3 -m json.tool N0TE_CONTEXT_PACK.json >/dev/null
+
+      - name: Validate UI JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          import tempfile
+
+          html = Path('app/static/index.html').read_text(encoding='utf-8')
+          scripts = re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', html, flags=re.S | re.I)
+          inline = '\n'.join(scripts).strip()
+          if not inline:
+              print('No inline JavaScript found; skipping.')
+              raise SystemExit(0)
+          with tempfile.NamedTemporaryFile('w', suffix='.js', encoding='utf-8', delete=False) as fh:
+              fh.write(inline)
+              tmp = fh.name
+          subprocess.run(['node', '--check', tmp], check=True)
+          PY
