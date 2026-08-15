@@ -45,6 +45,8 @@ from n0te_provider import provider_status
 from n0te_network import NetworkPolicy
 from n0te_intent import IntentRouter
 from n0te_safety import SafetyController
+from n0te_services import CreatorService
+from n0te_media import MockStreamBackend
 
 APP_VERSION = "1.2.4"
 HOST = "127.0.0.1"
@@ -66,6 +68,7 @@ library = LibraryIndex(STATE)
 projects = ProjectStore(STATE)
 intent_router = IntentRouter()
 safety = SafetyController(STATE)
+creator_service = CreatorService(STATE, safety, MockStreamBackend())
 proposals: dict[str, dict[str, Any]] = {}
 simplify_proposals: dict[str, dict[str, Any]] = {}
 _snapshot_lock = threading.Lock()
@@ -1356,6 +1359,12 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == "/api/engineer":
                 self.send_json({"ok": True, "data": engineer_status()})
                 return
+            if self.path == "/api/artist-world":
+                return self.send_json({"ok": True, "artist_world": creator_service.artist_read()})
+            if self.path == "/api/creator/projects":
+                return self.send_json({"ok": True, "projects": creator_service.projects()})
+            if self.path == "/api/stream":
+                return self.send_json({"ok": True, "stream": creator_service.stream_state()})
             return super().do_GET()
         except Exception as exc:
             _diagnostic_log.error("GET %s: %s", self.path[:300], type(exc).__name__)
@@ -1380,6 +1389,24 @@ class Handler(SimpleHTTPRequestHandler):
                         config[key] = data[key]
                 save_config(config)
                 return self.send_json({"ok": True, "api_key": bool(get_api_key()), "config": config, "providers": {"openverse_token": bool(get_secret("openverse_token")), "freesound_api_key": bool(get_secret("freesound_api_key"))}})
+
+            if self.path == "/api/artist-world":
+                return self.send_json({"ok": True, "artist_world": creator_service.artist_update(self.body_json())})
+            if self.path == "/api/creator/projects":
+                data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.project_create(str(data.get("song_id") or ""),str(data.get("title") or "Untitled"))})
+            if self.path == "/api/creator/recipe":
+                data=self.body_json(); return self.send_json({"ok":True,"recipe":creator_service.recipe(str(data.get("project_id") or ""),str(data.get("recipe") or ""),data.get("sections") or [],data.get("marks") or [],str(data.get("aspect") or "9:16"),str(data.get("artist_mode") or "USE_ARTIST_WORLD"))})
+            if self.path == "/api/creator/edit":
+                data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.edit(str(data.get("project_id") or ""),int(data.get("index",-1)),str(data.get("operation") or ""),data.get("params") or {})})
+            if self.path == "/api/creator/visibility":
+                data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.visibility(str(data.get("project_id") or ""),str(data.get("visibility") or ""),str(data.get("authority") or ""),bool(data.get("explicit")))})
+            if self.path == "/api/stream":
+                data=self.body_json();op=str(data.get("operation") or "state")
+                if op=="test": value=creator_service.stream_test(str(data.get("scene") or "PRODUCING"))
+                elif op=="go_live": value=creator_service.stream_live(str(data.get("scene") or "PRODUCING"),str(data.get("authority") or ""),bool(data.get("explicit")),bool(data.get("reconnect")))
+                elif op=="stop": value=creator_service.stream_stop()
+                else: value=creator_service.stream_state()
+                return self.send_json({"ok":True,"stream":value})
 
             if self.path == "/api/chat":
                 data = self.body_json()

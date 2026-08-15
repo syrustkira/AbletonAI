@@ -31,6 +31,10 @@ class CreatorEngine:
   p=ContentProject(uuid.uuid4().hex,song_id,title);self.save(p);return p
  def save(self,p):
   self.root.mkdir(parents=True,exist_ok=True);row=asdict(p);row["visibility"]=p.visibility.value;atomic_write_json(self.root/f"{p.id}.json",row)
+ def get(self,id):
+  try:r=json.loads((self.root/f"{id}.json").read_text());r["visibility"]=Visibility(r["visibility"]);r["timeline"]=[TimelineSegment(**x) for x in r.get("timeline",[])];return ContentProject(**r)
+  except (OSError,ValueError,TypeError):return None
+ def list(self):return [p for p in (self.get(x.stem) for x in sorted(self.root.glob("*.json"))) if p]
  def set_visibility(self,p,visibility,*,authority="",explicit=False):
   if visibility is Visibility.PUBLIC:
    if self.safety.status().get("safe"):raise PermissionError("SAFE prevents public action")

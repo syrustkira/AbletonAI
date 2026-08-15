@@ -143,6 +143,18 @@ class ServerRouteCharacterizationTests(unittest.TestCase):
         self.assertEqual(payload["notes"]["notes"][0]["pitch"], 60)
         self.assertEqual(payload["error"], "")
 
+    def test_creator_routes_preserve_local_boundary_and_public_authority(self):
+        with patch.object(server.creator_service, "artist_read", return_value={"identity": {}}):
+            status, _, body = self._request("GET", "/api/artist-world")
+        self.assertEqual(status, 200); self.assertIn("artist_world", json.loads(body))
+        with patch.object(server.creator_service, "visibility", side_effect=PermissionError("explicit user required")):
+            status, _, body = self._request("POST", "/api/creator/visibility", b'{"project_id":"p","visibility":"PUBLIC","authority":"ai","explicit":true}')
+        self.assertEqual(status, 403); self.assertFalse(json.loads(body)["ok"])
+
+    def test_stream_reconnect_cannot_go_live_through_http(self):
+        status, _, body = self._request("POST", "/api/stream", b'{"operation":"go_live","scene":"PRODUCING","authority":"user","explicit":true,"reconnect":true}')
+        self.assertEqual(status, 403); self.assertFalse(json.loads(body)["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()
