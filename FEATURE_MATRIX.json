@@ -1,0 +1,168 @@
+{
+  "version": "1.2.4",
+  "rule": "Do not build a duplicate when Ableton already solves the mechanical job well.",
+  "features": [
+    {
+      "feature": "Capture what I just played",
+      "ableton": "Capture MIDI",
+      "n0te_role": "natural-language orchestration only",
+      "status": "native_first"
+    },
+    {
+      "feature": "Find similar local sounds",
+      "ableton": "Browser/Sound Similarity where available",
+      "n0te_role": "orchestrate; add song-role reasoning and memory",
+      "status": "native_first"
+    },
+    {
+      "feature": "Find sounds on the web",
+      "ableton": "limited to integrated/provider workflows",
+      "n0te_role": "Openverse/Freesound/web fallback with provenance",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Capability resolver",
+      "ableton": "Browser/categories expose tools, not goal reasoning",
+      "n0te_role": "current set -> native -> owned -> extension -> external decision layer",
+      "status": "n0te_core"
+    },
+    {
+      "feature": "Plugin functional analysis",
+      "ableton": "device/parameter state is exposed",
+      "n0te_role": "translate parameters into functional jobs/overhead/keep-or-simplify reasoning",
+      "status": "n0te_core"
+    },
+    {
+      "feature": "Simplify/replace chain",
+      "ableton": "native devices/racks provide alternatives",
+      "n0te_role": "functional decomposition, candidate selection, reversible A/B",
+      "status": "n0te_core"
+    },
+    {
+      "feature": "MIDI humanization",
+      "ableton": "grooves, velocity deviation, probability, MIDI tools",
+      "n0te_role": "musical direction and restraint; use native mechanisms first",
+      "status": "native_first"
+    },
+    {
+      "feature": "MIDI constrained variation",
+      "ableton": "MIDI generators/transformations",
+      "n0te_role": "motif/harmony/section-aware constraints and review",
+      "status": "hybrid"
+    },
+    {
+      "feature": "Audio to MIDI / hum to MIDI",
+      "ableton": "native conversion workflows",
+      "n0te_role": "one-command orchestration; external fallback only if needed",
+      "status": "native_first"
+    },
+    {
+      "feature": "Stem separation",
+      "ableton": "native on supported Live editions/versions",
+      "n0te_role": "use native first; external forensics fallback later",
+      "status": "native_first"
+    },
+    {
+      "feature": "Vocal pitch/harmony",
+      "ableton": "Auto Shift where available",
+      "n0te_role": "Music-Map-aware harmony decisions/routing",
+      "status": "hybrid"
+    },
+    {
+      "feature": "Take lanes/comping",
+      "ableton": "native take lanes",
+      "n0te_role": "name/manage experiments and remember outcomes",
+      "status": "native_first"
+    },
+    {
+      "feature": "Scratchpad/alternate versions",
+      "ableton": "Session View, take lanes, duplicate/copy workflows",
+      "n0te_role": "choose native mechanism and track intent",
+      "status": "native_first"
+    },
+    {
+      "feature": "Production recipes",
+      "ableton": "individual operations exist",
+      "n0te_role": "workflow-level intent macros with validation/undo",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Music Map / chord dependencies",
+      "ableton": "scale awareness/locators but no persistent semantic dependency graph",
+      "n0te_role": "song-wide harmony/section context and chord followers",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Reference Delta",
+      "ableton": "meters/analyzers available",
+      "n0te_role": "section-matched comparison plus interpretation and ear decision",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Plugin Delta / hear difference",
+      "ableton": "bypass is native",
+      "n0te_role": "capture enabled/bypassed difference and simplify verification",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Finish Dry Run",
+      "ableton": "export/render is native",
+      "n0te_role": "preflight report combining structural/audio evidence",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Collect/portability",
+      "ableton": "Collect All and Save, bounce/freeze workflows",
+      "n0te_role": "dependency audit and orchestration; no duplicate file manager",
+      "status": "native_first"
+    },
+    {
+      "feature": "Recovery capsule",
+      "ableton": "Set backups preserve DAW state",
+      "n0te_role": "preserve semantic intent, decisions, references, plugin jobs, provenance",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Voice profile / guide singer",
+      "ableton": "no personalized singer identity system",
+      "n0te_role": "future authorized-voice external engine",
+      "status": "future_external"
+    },
+    {
+      "feature": "Extensions SDK transport",
+      "ableton": "official Extensions path on supported beta/setup",
+      "n0te_role": "future LiveBridge adapter only; not required",
+      "status": "future_transport"
+    }
+  ],
+  "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",
+  "status_semantics": {
+    "native_first": "Ableton already solves the mechanical job; N0TE should orchestrate/contextualize rather than duplicate it.",
+    "n0te_core": "Core N0TE responsibility; implementation completeness must be verified in BUILD_VALIDATION.md.",
+    "n0te_additive": "N0TE adds a capability/workflow layer; may be partial/planned.",
+    "hybrid": "Use native mechanisms plus N0TE context/reasoning.",
+    "future_external": "Later external capability; not Song-Ready blocking.",
+    "future_transport": "Later transport option; not Song-Ready blocking."
+  },
+  "song_ready_status": {
+    "state": "blocked_pending_gate_1_hardening",
+    "reason": "Real Live bridge/selection acceptance succeeded after correcting the Ableton User Library setting, but code review found transaction ownership/Undo isolation and related reliability work that must be completed before trusting mutations on a real song.",
+    "blocking_items": [
+      "song/Set-scoped transactions and Undo",
+      "fresh Apply/target revalidation",
+      "Remote Script/User Library doctor",
+      "atomic/thread-safe critical state",
+      "server failure-path hardening and acceptance tests"
+    ],
+    "non_blocking_later_features": [
+      "Audio Evidence",
+      "MCP sync",
+      "Production Recipes",
+      "Music Map 2",
+      "advanced MIDI variation",
+      "Try in Song",
+      "plugin sandbox",
+      "Voice Lab"
+    ]
+  }
+}

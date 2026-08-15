@@ -1,12 +1,10 @@
 __pycache__/
 *.py[cod]
+.DS_Store
+.pytest_cache/
 .coverage
 htmlcov/
-.pytest_cache/
-.DS_Store
+.n0te-import/
 *.log
 .env
 .env.*
-secrets.json
-api_key
-.n0te-import/

@@ -1,0 +1,42 @@
+{
+  "product": "N0TE Ableton AI",
+  "version": "1.2.4",
+  "codename": "Creative Coproducer Hardening + Audited macOS Bootstrap",
+  "upstream": {
+    "repo": "bschoepke/ableton-live-mcp",
+    "commit": "70f7df9192b78d9bd9405f369c9e046c88f1610e"
+  },
+  "ports": {
+    "ableton_bridge": 8765,
+    "n0te_ui": 8766
+  },
+  "install_scope": "user",
+  "views": [
+    "NOW",
+    "SONG",
+    "DISCOVER",
+    "CREATE",
+    "TOOLS",
+    "COMPARE",
+    "FINISH",
+    "HISTORY",
+    "HEALTH",
+    "ENGINEER"
+  ],
+  "interaction": "TYPE -> ANALYZE -> CONSULT -> PROPOSE -> IMPLEMENT -> REVIEW -> KEEP/ADJUST/UNDO",
+  "installers": [
+    "macos_bootstrap",
+    "python_backend",
+    "installed_uninstaller"
+  ],
+  "python_bootstrap": {
+    "required_python": ">=3.10",
+    "pinned_if_missing": "3.13.15",
+    "source": "python.org",
+    "sha256": "3b7eaf7f29825f796e8267024435540ddf1f17fc9a97ad58095daa7a75bfdcd3",
+    "requires_user_approval": true,
+    "signer": "Python Software Foundation (BMM5U3QVKW)",
+    "https_certificate_check": true
+  },
+  "installer_manifest_schema": 2
+}

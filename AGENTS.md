@@ -1,65 +1,103 @@
-# N0TE Ableton AI — Agent Engineering Contract
+# N0TE Ableton AI — Agent Instructions
 
-This repository contains a safety-sensitive Ableton Live coproducer. Read this file before editing.
-
-## Read first
+This repository is the canonical source of truth for N0TE Ableton AI. Before architectural or behavioral changes, read:
 
 1. `PROJECT_BLUEPRINT.md`
-2. `docs/ROADMAP.md`
-3. `FEATURE_MATRIX.json`
-4. `N0TE_CONTEXT_PACK.json`
-5. `BUILD_VALIDATION.md`
-6. `HARDENING_AUDIT.md`
+2. `FEATURE_MATRIX.json`
+3. `N0TE_CONTEXT_PACK.json`
+4. `BUILD_VALIDATION.md`
+5. `HARDENING_AUDIT.md`
+6. `docs/ROADMAP.md`
 
-## Product invariants
+## Product doctrine
 
-- N0TE is a coproducer and production operating system, not an autonomous DAW generator.
-- Primary UX: TYPE → ANALYZE → CONSULT → PROPOSE → USER APPROVES → IMPLEMENT → REVIEW → KEEP / ADJUST / UNDO.
-- Knowledge Plane may be broad; Action Plane must remain narrow, validated, proposal-gated and reversible.
-- Normal AI must never receive arbitrary `live_eval`, `live_exec`, Python execution or unrestricted Live mutation.
-- Default solution order: CURRENT SET → ABLETON NATIVE → ALREADY OWNED TOOL/RACK → N0TE EXTENSION FOR TRUE GAP → EXTERNAL/WEB/NEW.
-- Preserve originals for experiments. Fail closed when ownership, target identity or recovery safety cannot be proven.
-- Never claim audio was heard unless audio was actually captured and analyzed.
-- Never claim CPU savings without measurement.
-- Never claim plugin equivalence from category alone.
-- Do not duplicate strong native Ableton mechanisms merely to own the feature.
+1. N0TE exists to help TellMeN0TE finish records. Do not turn it into a generic DAW generator.
+2. Primary loop: TYPE → ANALYZE → CONSULT → PROPOSE → USER APPROVES → IMPLEMENT → REVIEW → KEEP / ADJUST / UNDO.
+3. Infer ASK / ADVISE / TRY / DO from normal producer language.
+4. Knowledge Plane may be broad; Action Plane must stay small, validated, approval-gated and reversible.
+5. Normal AI must never expose arbitrary `live_eval`, `live_exec`, Python or equivalent unrestricted mutation.
+6. Prefer CURRENT SET → ABLETON NATIVE → OWNED TOOL/RACK → N0TE EXTENSION → EXTERNAL/WEB/NEW.
+7. Do not rebuild strong native Ableton mechanisms when orchestration/context is the real gap.
+8. Never claim sonic equivalence by category.
+9. Never claim CPU savings without measurement.
+10. “Leave it alone” is valid.
+11. Preserve originals during experiments.
+12. Audio claims require actual captured audio evidence.
+13. Do not add a feature category merely because it is interesting. Complete the canonical roadmap.
 
-## Truth, state and safety precedence
+## Source-of-truth and drift rules
 
-- Derive current implementation behavior from code and tests, not prose alone.
-- If documentation and implementation disagree, report the drift.
-- Do not silently rewrite architecture to match accidental implementation.
-- Explicit current user intent defines creative intent.
-- Fresh Live snapshots define current Ableton technical state.
+- Code and tests establish current implementation behavior.
+- `PROJECT_BLUEPRINT.md` establishes intended architecture/invariants.
+- `FEATURE_MATRIX.json` establishes current feature status.
+- `docs/ROADMAP.md` establishes build order.
+- If implementation and documentation disagree, report the drift. Do not silently rewrite architecture to match an accidental implementation and do not claim documentation proves behavior.
+
+## Truth and state precedence
+
+- Fresh Live evidence defines current technical Ableton state.
+- Explicit current user intent defines creative intent/preferences.
 - Captured measurements define measured audio facts.
+- Stored context may be stale and must not silently override newer evidence.
 - AI inference must remain labeled as inference.
-- Persistent state mutations should be atomic and backwards-compatible.
-- Every Ableton mutation transaction must belong to a verifiable song/Set.
-- Legacy state whose ownership cannot be proven must fail closed rather than be guessed.
-- Concurrent mutation paths must be serialized or otherwise proven safe.
+- Conflicts should be surfaced.
 
-## Mutation pipeline
+## Architecture boundaries
 
-Every normal mutation must preserve:
+- Keep product/music logic above `LiveBridge`.
+- Ableton bridge endpoint: `127.0.0.1:8765`.
+- N0TE companion UI endpoint: `127.0.0.1:8766`.
+- Persistent user state lives under `~/.n0te-ableton-ai` and must not be committed.
+- Installer updates remain transactional: failed update restores previous working N0TE; uninstall restores pre-N0TE state only when trustworthy manifest evidence exists.
+- Never put credentials in source or Git history.
 
-`PROPOSE → VALIDATE → USER APPROVAL → REVALIDATE → EXECUTE → JOURNAL → REVIEW → UNDO`
+## Mutation invariant
 
-No MCP, API, UI or future adapter may bypass this pipeline.
+Any code capable of changing Ableton must preserve:
 
-## Engineering discipline
+**PROPOSE → VALIDATE → USER APPROVAL → REVALIDATE → EXECUTE → JOURNAL → REVIEW → UNDO**
 
-- Inspect existing implementation/tests before editing.
-- Make the smallest coherent change that completely solves the task.
-- Add regression tests that fail against the old behavior.
-- Do not add unrelated feature categories.
-- Do not loosen validation to make tests pass.
-- Preserve persistent user/song/context state across migrations.
-- Keep product/music logic above `LiveBridge` so transport remains replaceable.
-- Treat real Ableton/macOS acceptance separately from mocked/automated tests.
+Every N0TE transaction must belong to a verifiable song/Set. Legacy ownership that cannot be proven must fail closed rather than be guessed.
 
-## Canonical validation
+MCP or another interface may not bypass this invariant.
 
-Run at minimum:
+## Persistence/concurrency
+
+- Treat user/song/context/history as product data.
+- Prefer atomic writes (temporary file + replace) for important JSON/state.
+- Use stable locks; do not create throwaway locks that fail to synchronize with other callers.
+- Serialize mutating operations or prove concurrency safety.
+- Preserve backwards-compatible state migration.
+
+## Definition of done
+
+A feature is not DONE merely because a schema, prompt, endpoint or UI button exists. It must be implemented, connected to real state where required, tested, exposed through actual product UX, and real-Live accepted where Live-dependent. Audio claims require real captured audio.
+
+## Change discipline
+
+Before editing:
+
+1. inspect `git status`,
+2. run relevant baseline tests,
+3. inspect current implementation/tests,
+4. identify invariants and failure modes,
+5. keep the change bounded.
+
+Do not:
+
+- modify unrelated work,
+- opportunistically redesign adjacent systems,
+- loosen validation to make tests pass,
+- invent audio evidence,
+- silently break persistent-state compatibility,
+- modify pinned third-party source/attribution without an explicit dependency update,
+- bump the release version unless the release is actually being cut.
+
+Regression fixes require tests that fail on the old behavior.
+
+## Validation before completion
+
+Run the relevant subset plus the full suite where practical:
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -72,19 +110,21 @@ python3 -m json.tool FEATURE_MATRIX.json >/dev/null
 python3 -m json.tool N0TE_CONTEXT_PACK.json >/dev/null
 ```
 
-Also run repository JavaScript syntax validation and permanent CI checks where available.
+If Node is available, syntax-check the JavaScript in `app/static/index.html` using the existing validation approach.
 
-## Completion reporting
+Never claim mocked tests prove actual Ableton/macOS/plugin behavior.
 
-Report:
-- root cause/problem
-- files changed
-- behavior changed
-- tests added
-- complete validation results
-- state/schema compatibility
-- security/safety implications
-- documentation drift/status changes
-- real Ableton/macOS checks still required
+## Completion report
 
-Do not claim a Live-dependent feature fully proven from mocks alone.
+For substantial tasks report:
+
+1. root cause/current behavior,
+2. files changed,
+3. behavior changed,
+4. tests added,
+5. complete validation results,
+6. persistent-state/schema compatibility,
+7. security/safety implications,
+8. documentation drift found/updated,
+9. what still requires real Ableton/macOS acceptance,
+10. recommended next bounded task without implementing it.
