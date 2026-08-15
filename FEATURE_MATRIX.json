@@ -133,6 +133,24 @@
       "ableton": "official Extensions path on supported beta/setup",
       "n0te_role": "future LiveBridge adapter only; not required",
       "status": "future_transport"
+    },
+    {
+      "feature": "AI OFF deterministic foundation",
+      "ableton": "not applicable",
+      "n0te_role": "explicit credential-free OFF state; deterministic server functions remain available",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Central NetworkPolicy",
+      "ableton": "not applicable",
+      "n0te_role": "fail-closed outbound policy; AI provider path migrated, remaining network callers pending",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Capability Engine",
+      "ableton": "Live remains the first deep integration",
+      "n0te_role": "typed/versioned runtime registry with explicit privacy, cost, and mutation escalation",
+      "status": "partially_implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",
@@ -142,7 +160,12 @@
     "n0te_additive": "N0TE adds a capability/workflow layer; may be partial/planned.",
     "hybrid": "Use native mechanisms plus N0TE context/reasoning.",
     "future_external": "Later external capability; not Song-Ready blocking.",
-    "future_transport": "Later transport option; not Song-Ready blocking."
+    "future_transport": "Later transport option; not Song-Ready blocking.",
+    "implemented": "Implemented and automatically validated; external acceptance may still be separately required.",
+    "partially_implemented": "A working tested subset exists, with explicitly documented integration work remaining.",
+    "interface_only": "Contracts/scaffolding exist, but no real integration is claimed.",
+    "external_acceptance_pending": "Implementation exists but requires real external system or hardware acceptance.",
+    "planned": "Not implemented."
   },
   "song_ready_status": {
     "state": "implementation_complete_real_live_acceptance_pending",

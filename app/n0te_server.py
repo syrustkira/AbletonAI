@@ -41,6 +41,8 @@ from n0te_discovery import discover, extract_discovery_intent
 from n0te_project import ProjectStore, finish_checklist
 from n0te_state import atomic_write_json
 from n0te_doctor import remote_script_doctor
+from n0te_provider import provider_status
+from n0te_network import NetworkPolicy
 
 APP_VERSION = "1.2.4"
 HOST = "127.0.0.1"
@@ -76,6 +78,9 @@ def load_config() -> dict[str, Any]:
         "mode": "produce",
         "context_sync_path": "",
         "auto_refresh_seconds": 5,
+        "ai_provider": "openai",
+        "network_mode": "full",
+        "community_enabled": False,
     }
     if CONFIG_PATH.exists():
         try:
@@ -504,6 +509,8 @@ def looks_like_tool_question(text: str) -> bool:
 
 
 def ask_openai(user_text: str, snap: dict[str, Any]) -> dict[str, Any]:
+    if str(load_config().get("ai_provider") or "openai").lower() in {"off", "none"}:
+        raise DependencyUnavailableError("AI is intentionally OFF. Status, project, history, diagnostics, Apply, and Undo remain available.")
     config = load_config()
     context_pack = context_store.load(config.get("context_sync_path") or "")
     song_state = projects.load_song(snap)
@@ -1233,6 +1240,11 @@ def status_payload() -> dict[str, Any]:
             "openverse_token": bool(get_secret("openverse_token")),
             "freesound_api_key": bool(get_secret("freesound_api_key")),
         },
+        "services": {
+            "ai": provider_status(),
+            "network": NetworkPolicy.from_value(config.get("network_mode")).status(),
+            "community": {"state": "READY" if config.get("community_enabled") else "OFF"},
+        },
     }
     try:
         snap = get_snapshot()
@@ -1344,7 +1356,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if data.get("openverse_token"):
                     store_secret("openverse_token", str(data["openverse_token"]))
                 config = load_config()
-                for key in ("model", "mode", "context_sync_path", "auto_refresh_seconds"):
+                for key in ("model", "mode", "context_sync_path", "auto_refresh_seconds", "ai_provider", "network_mode", "community_enabled"):
                     if key in data:
                         config[key] = data[key]
                 save_config(config)
