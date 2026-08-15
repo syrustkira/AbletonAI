@@ -22,6 +22,9 @@ jobs:
       - name: Python tests
         run: python3 -m unittest discover -s tests -v
 
+      - name: Reproducible coverage
+        run: bash scripts/coverage.sh
+
       - name: Compile Python
         run: python3 -m compileall -q app INSTALL_N0TE_ABLETON_AI.py
 

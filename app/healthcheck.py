@@ -1,5 +1,6 @@
 from pathlib import Path
 import json, os, socket, sys
+from n0te_doctor import remote_script_doctor
 
 
 def probe(host, port):
@@ -40,4 +41,5 @@ checks = {
     "transactions": len(list((state / "transactions").glob("*.json"))) if (state / "transactions").exists() else 0,
     "checkpoints": len(list((state / "checkpoints").rglob("*.json"))) if (state / "checkpoints").exists() else 0,
 }
+checks["remote_script_doctor"] = remote_script_doctor(state, home)
 print(json.dumps(checks, indent=2))

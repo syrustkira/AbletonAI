@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import re
 import subprocess
@@ -35,6 +37,8 @@ from n0te_core import (
 from n0te_library import LibraryIndex, current_set_devices, resolve_tools
 from n0te_discovery import discover, extract_discovery_intent
 from n0te_project import ProjectStore, finish_checklist
+from n0te_state import atomic_write_json
+from n0te_doctor import remote_script_doctor
 
 APP_VERSION = "1.2.4"
 HOST = "127.0.0.1"
@@ -43,6 +47,13 @@ KEYCHAIN_SERVICE = "N0TE_Ableton_AI_OpenAI"
 CONFIG_PATH = STATE / "config.json"
 SECRET_PATH = STATE / "secrets.json"
 
+_diagnostic_log = logging.getLogger("n0te.diagnostics")
+if not _diagnostic_log.handlers:
+    handler = RotatingFileHandler(STATE / "diagnostics.log", maxBytes=512_000, backupCount=3, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    _diagnostic_log.addHandler(handler)
+    _diagnostic_log.setLevel(logging.INFO)
+
 bridge = AbletonBridge()
 context_store = ContextStore(HERE / "context" / "N0TE_CONTEXT_PACK.json", STATE)
 library = LibraryIndex(STATE)
@@ -50,6 +61,10 @@ projects = ProjectStore(STATE)
 proposals: dict[str, dict[str, Any]] = {}
 simplify_proposals: dict[str, dict[str, Any]] = {}
 _snapshot_lock = threading.Lock()
+_mutation_lock = threading.RLock()
+_proposal_lock = threading.RLock()
+PROPOSAL_TTL_SECONDS = 15 * 60
+MAX_REQUEST_BODY = 1024 * 1024
 _snapshot_cache: dict[str, Any] = {"at": 0.0, "value": None}
 
 
@@ -71,7 +86,7 @@ def load_config() -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any]) -> None:
-    CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(CONFIG_PATH, config)
 
 
 def load_secrets() -> dict[str, str]:
@@ -90,7 +105,7 @@ def store_secret(name: str, value: str) -> None:
         return
     secrets = load_secrets()
     secrets[name] = value
-    SECRET_PATH.write_text(json.dumps(secrets, indent=2), encoding="utf-8")
+    atomic_write_json(SECRET_PATH, secrets, mode=0o600)
     try:
         SECRET_PATH.chmod(0o600)
     except Exception:
@@ -294,6 +309,97 @@ def compact_snapshot(snap: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+class ConflictError(RuntimeError):
+    """Current Live evidence no longer matches an approved operation."""
+
+
+def cleanup_proposals(now: float | None = None) -> None:
+    cutoff = (now or time.time()) - PROPOSAL_TTL_SECONDS
+    with _proposal_lock:
+        for registry in (proposals, simplify_proposals):
+            for key in [key for key, value in registry.items() if value.get("created_at") is not None and float(value.get("created_at")) < cutoff]:
+                registry.pop(key, None)
+
+
+def _all_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for device in devices:
+        if not isinstance(device, dict):
+            continue
+        result.append(device)
+        children = device.get("devices") or device.get("nested_devices") or []
+        result.extend(_all_devices(children if isinstance(children, list) else []))
+        for chain in device.get("chains") or []:
+            if isinstance(chain, dict):
+                result.extend(_all_devices(chain.get("devices") or []))
+    return result
+
+
+def affected_target_evidence(actions: list[dict[str, Any]], snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    tracks = [t for group in ("tracks", "return_tracks") for t in snapshot.get("set", {}).get(group) or [] if isinstance(t, dict)]
+    master = snapshot.get("set", {}).get("master_track")
+    if isinstance(master, dict):
+        tracks.append(master)
+    evidence = []
+    for action in actions:
+        row: dict[str, Any] = {"kind": action.get("kind"), "target_id": action.get("target_id")}
+        idx = action.get("track_index")
+        track = next((t for t in tracks if t.get("index") == idx), None)
+        if track and str(action.get("kind", "")).startswith(("set_track_", "rename_track")):
+            row.update({"object_type": "track", "object_id": track.get("id"), "track_index": idx, "name_before": track.get("name")})
+        target_id = action.get("target_id")
+        if target_id:
+            devices = [d for t in tracks for d in _all_devices(t.get("devices") or [])]
+            device = next((d for d in devices if d.get("id") == target_id), None)
+            clips = [c for t in tracks for c in ((t.get("clips") or []) + (t.get("arrangement_clips") or [])) if isinstance(c, dict)]
+            target = device or next((c for c in clips if c.get("id") == target_id), None)
+            if target:
+                row.update({"object_type": "device" if device else "clip", "object_id": target_id, "name_before": target.get("name"), "class_name": target.get("class_name", "")})
+        evidence.append(row)
+    return evidence
+
+
+def _same_action_value(current: dict[str, Any], intended: dict[str, Any]) -> bool:
+    kind = intended.get("kind")
+    keys = {
+        "rename_track": ("string_value",), "set_clip_name": ("string_value",),
+        "set_track_mute": ("bool_value",), "set_track_solo": ("bool_value",),
+        "set_track_arm": ("bool_value",), "set_device_active": ("bool_value",),
+        "set_clip_muted": ("bool_value",), "set_track_pan": ("number_value",),
+        "set_track_volume": ("number_value",), "set_send_level": ("number_value",),
+        "set_tempo": ("number_value",), "set_device_parameter": ("number_value",),
+        "set_arrangement_loop": ("bool_value", "number_value", "number_value_2"),
+        "update_midi_clip_notes": ("string_value",),
+    }.get(kind, ())
+    if kind == "update_midi_clip_notes":
+        try:
+            wanted = {r["note_id"]: r for r in json.loads(intended["string_value"])}
+            actual = {r["note_id"]: r for r in json.loads(current["string_value"])}
+            return all(all(actual.get(nid, {}).get(k) == value for k, value in row.items() if k != "note_id") for nid, row in wanted.items())
+        except Exception:
+            return False
+    return bool(keys) and all(current.get(key) == intended.get(key) for key in keys)
+
+
+def recovery_conflicts(live_bridge, tx: dict[str, Any], snapshot: dict[str, Any]) -> list[str]:
+    evidence = tx.get("affected_targets") or []
+    tracks = snapshot.get("set", {}).get("tracks") or []
+    errors = []
+    for row in evidence:
+        if row.get("object_type") == "track":
+            match = next((t for t in tracks if t.get("id") == row.get("object_id")), None)
+            if not match or match.get("index") != row.get("track_index"):
+                errors.append(f"track target {row.get('object_id')} no longer matches")
+    for action in tx.get("actions") or []:
+        try:
+            current = capture_inverse(live_bridge, action)
+            if not _same_action_value(current, action):
+                errors.append(f"affected target for {action.get('kind')} changed incompatibly")
+        except Exception as exc:
+            errors.append(f"cannot revalidate {action.get('kind')}: {exc}")
+    return errors
+
+
 def extract_output_text(response: dict[str, Any]) -> str:
     texts: list[str] = []
     for item in response.get("output") or []:
@@ -373,7 +479,7 @@ def ask_openai(user_text: str, snap: dict[str, Any]) -> dict[str, Any]:
             )
         except Exception as exc:
             discovery_context = {"error": str(exc), "query": user_text}
-    _, recent_tx = latest_transaction(STATE)
+    _, recent_tx = latest_transaction(STATE, projects.song_key(snap))
     recent_change = None
     if recent_tx:
         recent_change = {
@@ -470,38 +576,68 @@ Use evidence_labels to distinguish Live-state fact, audio measurement, inference
 
 
 def apply_proposal(proposal_id: str) -> dict[str, Any]:
-    prop = proposals.get(proposal_id)
-    if not prop:
-        raise RuntimeError("Unknown or expired proposal.")
-    current = get_snapshot(force=True)
-    expected = prop["signature"]
-    actual = current["set"].get("set_signature")
-    if expected != actual:
-        raise RuntimeError("The Live Set changed since this proposal was created. Refresh/re-analyze before applying.")
-    actions = prop["reply"].get("actions") or []
-    if not actions:
-        return {"ok": True, "message": "No actions to apply.", "results": []}
-    # Capture every inverse before the first mutation so a partially executed proposal can be rolled back safely.
-    inverses = [capture_inverse(bridge, action) for action in actions]
-    results = []
-    try:
+    with _mutation_lock:
+        cleanup_proposals()
+        prop = proposals.get(proposal_id)
+        if not prop:
+            raise LookupError("Unknown or expired proposal.")
+        current = get_snapshot(force=True)
+        expected = prop["signature"]
+        actual = current["set"].get("set_signature")
+        current_key = projects.song_key(current)
+        if prop.get("song_key") and prop["song_key"] != current_key:
+            raise ConflictError("The proposal belongs to another Live Set.")
+        if expected != actual:
+            raise ConflictError("The Live Set changed since this proposal was created. Refresh/re-analyze before applying.")
+        actions = prop["reply"].get("actions") or []
+        if not actions:
+            return {"ok": True, "message": "No actions to apply.", "results": []}
+        # Track indexes are volatile. When proposal-time evidence retained a
+        # stable exposed Track id, resolve its current index immediately before
+        # validation/execution rather than trusting the old raw index.
+        proposed_targets = prop.get("affected_targets") or []
+        current_tracks = current.get("set", {}).get("tracks") or []
+        for position, action in enumerate(actions):
+            evidence = proposed_targets[position] if position < len(proposed_targets) else {}
+            if evidence.get("object_type") == "track" and evidence.get("object_id") is not None:
+                match = next((t for t in current_tracks if t.get("id") == evidence["object_id"]), None)
+                if not match or not isinstance(match.get("index"), int):
+                    raise ConflictError(f"Approved track target {evidence['object_id']} is no longer resolvable.")
+                action["track_index"] = match["index"]
         for action in actions:
-            result = execute_action(bridge, action, expected if not results else None)
-            results.append(result)
-    except Exception as exc:
-        rollback_errors = []
-        for inverse in reversed(inverses[:len(results)]):
-            try:
-                execute_action(bridge, inverse, None)
-            except Exception as rb_exc:
-                rollback_errors.append(str(rb_exc))
+            ok, reason = validate_action(action, current)
+            if not ok:
+                raise ConflictError(f"Fresh Apply validation failed: {reason}")
+        targets = affected_target_evidence(actions, current)
+        inverses = [capture_inverse(bridge, action) for action in actions]
+        results = []
+        try:
+            for action in actions:
+                result = execute_action(bridge, action, expected if not results else None)
+                results.append(result)
+        except Exception as exc:
+            rollback_errors = []
+            for inverse in reversed(inverses[:len(results)]):
+                try:
+                    execute_action(bridge, inverse, None)
+                except Exception as rb_exc:
+                    rollback_errors.append(str(rb_exc))
+            invalidate_snapshot()
+            detail = f"Proposal failed after {len(results)} action(s): {exc}"
+            if rollback_errors:
+                detail += " | rollback errors: " + "; ".join(rollback_errors)
+            raise RuntimeError(detail)
         invalidate_snapshot()
-        detail = f"Proposal failed after {len(results)} action(s): {exc}"
-        if rollback_errors:
-            detail += " | rollback errors: " + "; ".join(rollback_errors)
-        raise RuntimeError(detail)
-    tx = make_transaction(actions, inverses, expected, results, label=prop["reply"].get("decision_summary") or "N0TE edit")
-    path = save_transaction(STATE, tx)
+        after = get_snapshot(force=True)
+        props = current.get("song", {}).get("properties", {})
+        tx = make_transaction(
+            actions, inverses, expected, results,
+            label=prop["reply"].get("decision_summary") or "N0TE edit",
+            song_key=current_key, set_path=str(props.get("file_path") or ""),
+            set_identity=str((current.get("song") or {}).get("id") or (current.get("song") or {}).get("object_id") or ""),
+            signature_after=str(after.get("set", {}).get("set_signature") or ""), targets=targets,
+        )
+        path = save_transaction(STATE, tx)
     projects.record_decision(
         current,
         title=prop["reply"].get("decision_summary") or "Applied N0TE change",
@@ -510,7 +646,6 @@ def apply_proposal(proposal_id: str) -> dict[str, Any]:
         details={"transaction": tx["id"], "actions": actions},
     )
     prop["applied_tx"] = tx["id"]
-    invalidate_snapshot()
     return {
         "ok": True, "transaction": tx["id"], "journal": str(path), "results": results,
         "review_prompt": "Applied and journaled. Listen/look at the result, then tell me what improved, what got worse, or what should stay. I have the exact recent change in context for the next message.",
@@ -518,18 +653,27 @@ def apply_proposal(proposal_id: str) -> dict[str, Any]:
 
 
 def undo_last_n0te() -> dict[str, Any]:
-    path, tx = latest_transaction(STATE)
+    with _mutation_lock:
+        return _undo_last_n0te_locked()
+
+
+def _undo_last_n0te_locked() -> dict[str, Any]:
+    snap = get_snapshot(force=True)
+    song_key = projects.song_key(snap)
+    path, tx = latest_transaction(STATE, song_key)
     if not tx:
-        return {"ok": False, "message": "No unapplied N0TE transaction to undo."}
+        any_path, any_tx = latest_transaction(STATE)
+        if any_tx:
+            return {"ok": False, "message": "The latest N0TE transaction belongs to another or unverified Set. Cross-Set Undo is refused."}
+        return {"ok": False, "message": "No unapplied N0TE transaction to undo for this Set."}
     if tx.get("transaction_type") == "experiment":
         created_id = tx.get("created_track_id")
-        snap = get_snapshot(force=True)
         tracks = [t for t in snap.get("set", {}).get("tracks") or [] if isinstance(t, dict)]
         match = next((t for t in tracks if t.get("id") == created_id), None)
         if not match:
             tx["undone"] = True
             tx["undone_at"] = time.time()
-            path.write_text(json.dumps(tx, indent=2), encoding="utf-8")
+            atomic_write_json(path, tx)
             return {"ok": True, "message": "Experiment track is already absent."}
         idx = match.get("index")
         expected_name = tx.get("created_track_name")
@@ -538,10 +682,13 @@ def undo_last_n0te() -> dict[str, Any]:
         bridge.request("call", {"ref": {"path": "live_set"}, "method": "delete_track", "args": [idx], "kwargs": {}, "timeout": 8})
         tx["undone"] = True
         tx["undone_at"] = time.time()
-        path.write_text(json.dumps(tx, indent=2), encoding="utf-8")
+        atomic_write_json(path, tx)
         invalidate_snapshot()
         return {"ok": True, "transaction": tx["id"], "message": "N0TE experiment track removed; original was never altered."}
 
+    unsafe = recovery_conflicts(bridge, tx, snap)
+    if unsafe:
+        return {"ok": False, "message": "Unsafe N0TE recovery refused: " + "; ".join(unsafe), "recovery_required": True}
     results, errors = [], []
     for action in reversed(tx.get("inverse_actions") or []):
         try:
@@ -558,7 +705,7 @@ def undo_last_n0te() -> dict[str, Any]:
         tx["rollback_attempted_at"] = time.time()
         tx["rollback_results"] = results
         tx["rollback_errors"] = errors
-        path.write_text(json.dumps(tx, indent=2), encoding="utf-8")
+        atomic_write_json(path, tx)
         invalidate_snapshot()
         return {
             "ok": False,
@@ -569,7 +716,7 @@ def undo_last_n0te() -> dict[str, Any]:
         }
     tx["undone"] = True
     tx["undone_at"] = time.time()
-    path.write_text(json.dumps(tx, indent=2), encoding="utf-8")
+    atomic_write_json(path, tx)
     invalidate_snapshot()
     return {"ok": True, "transaction": tx["id"], "results": results}
 
@@ -730,10 +877,14 @@ RULES:
 
 
 def build_simplify_experiment(proposal_id: str) -> dict[str, Any]:
+    cleanup_proposals()
     prop = simplify_proposals.get(proposal_id)
     if not prop:
         raise RuntimeError("Unknown or expired simplification proposal.")
     before = get_snapshot(force=True)
+    song_key = projects.song_key(before)
+    if prop.get("song_key") and prop.get("song_key") != song_key:
+        raise ConflictError("This simplification proposal belongs to another Live Set.")
     if before.get("set", {}).get("set_signature") != prop.get("signature"):
         raise RuntimeError("The set changed after the simplification analysis. Re-analyze before building an experiment.")
     track_idx = selected_track_index(before)
@@ -802,12 +953,18 @@ def build_simplify_experiment(proposal_id: str) -> dict[str, Any]:
             pass
         raise RuntimeError(f"Experiment construction failed and the N0TE duplicate was removed if possible: {exc}")
 
+    completed = get_snapshot(force=True)
     tx = {
         "id": f"exp-{int(time.time()*1000)}",
         "created_at": time.time(),
         "label": f"Simplify {original.get('name') or 'track'}",
         "transaction_type": "experiment",
         "set_signature_before": prop["signature"],
+        "set_signature_after": str(completed.get("set", {}).get("set_signature") or ""),
+        "song_key": song_key,
+        "set_path": str(before.get("song", {}).get("properties", {}).get("file_path") or ""),
+        "set_identity": str((before.get("song") or {}).get("id") or (before.get("song") or {}).get("object_id") or ""),
+        "affected_targets": [{"object_type": "track", "object_id": new_id, "name_after": new_name}],
         "created_track_id": new_id,
         "created_track_name": new_name,
         "original_track_id": original.get("id"),
@@ -1028,12 +1185,28 @@ def local_request_allowed(host: str, origin: str = "") -> bool:
     return True
 
 
+def error_status(exc: Exception) -> int:
+    if isinstance(exc, OverflowError):
+        return 413
+    if isinstance(exc, (ValueError, json.JSONDecodeError)):
+        return 400
+    if isinstance(exc, LookupError):
+        return 404
+    if isinstance(exc, ConflictError):
+        return 409
+    if isinstance(exc, (ConnectionError, TimeoutError, urllib.error.URLError)):
+        return 503
+    return 500
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC), **kwargs)
 
     def log_message(self, fmt, *args):
-        pass
+        # Standard request metadata only; bodies, model/audio payloads and headers
+        # (including credentials) are deliberately excluded.
+        _diagnostic_log.info("http %s", (fmt % args)[:1000])
 
     def send_json(self, obj: Any, status: int = 200) -> None:
         body = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -1045,11 +1218,21 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def body_json(self) -> dict[str, Any]:
-        n = int(self.headers.get("Content-Length", "0") or 0)
-        value = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+        try:
+            n = int(self.headers.get("Content-Length", "0") or 0)
+        except ValueError as exc:
+            raise ValueError("Invalid Content-Length") from exc
+        if n < 0 or n > MAX_REQUEST_BODY:
+            raise OverflowError(f"Request body exceeds {MAX_REQUEST_BODY} bytes")
+        try:
+            value = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Malformed JSON request body") from exc
         return value if isinstance(value, dict) else {}
 
     def do_GET(self):
+        if not local_request_allowed(self.headers.get("Host", ""), self.headers.get("Origin", "")):
+            return self.send_json({"ok": False, "error": "Rejected non-local request origin."}, 403)
         try:
             if self.path == "/api/status":
                 self.send_json(status_payload())
@@ -1070,7 +1253,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             return super().do_GET()
         except Exception as exc:
-            self.send_json({"ok": False, "error": str(exc)}, 200)
+            _diagnostic_log.error("GET %s: %s", self.path[:300], type(exc).__name__)
+            self.send_json({"ok": False, "error": str(exc)}, error_status(exc))
 
     def do_POST(self):
         if not local_request_allowed(self.headers.get("Host", ""), self.headers.get("Origin", "")):
@@ -1100,7 +1284,13 @@ class Handler(SimpleHTTPRequestHandler):
                 snap = get_snapshot(force=True)
                 reply = ask_openai(text, snap)
                 pid = str(int(time.time() * 1000))
-                proposals[pid] = {"created_at": time.time(), "signature": snap["set"].get("set_signature"), "reply": reply}
+                cleanup_proposals()
+                with _proposal_lock:
+                    proposals[pid] = {
+                        "created_at": time.time(), "signature": snap["set"].get("set_signature"),
+                        "song_key": projects.song_key(snap), "reply": reply,
+                        "affected_targets": affected_target_evidence(reply.get("actions") or [], snap),
+                    }
                 projects.append_conversation(snap, "user", text, {"proposal_id": pid})
                 projects.append_conversation(snap, "assistant", reply.get("message", ""), {"proposal_id": pid})
                 discovery_payload = reply.pop("_discovery", None)
@@ -1186,6 +1376,7 @@ class Handler(SimpleHTTPRequestHandler):
                 simplify_proposals[pid] = {
                     "created_at": time.time(),
                     "signature": snap.get("set", {}).get("set_signature"),
+                    "song_key": projects.song_key(snap),
                     "track_index": selected_track_index(snap),
                     "result": result,
                 }
@@ -1193,7 +1384,8 @@ class Handler(SimpleHTTPRequestHandler):
 
             if self.path == "/api/simplify/build":
                 data = self.body_json()
-                return self.send_json(build_simplify_experiment(str(data.get("proposal_id") or "")))
+                with _mutation_lock:
+                    return self.send_json(build_simplify_experiment(str(data.get("proposal_id") or "")))
 
             if self.path == "/api/checkpoint":
                 data = self.body_json()
@@ -1236,6 +1428,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "context": context_store.status(config.get("context_sync_path") or ""),
                     "library": library.summary(),
                     "engineer": engineer_status(snap),
+                    "remote_script_doctor": remote_script_doctor(STATE),
                 })
 
             if self.path == "/api/context/replace":
@@ -1260,7 +1453,8 @@ class Handler(SimpleHTTPRequestHandler):
 
             self.send_json({"ok": False, "error": "Unknown endpoint"}, 404)
         except Exception as exc:
-            self.send_json({"ok": False, "error": str(exc)}, 200)
+            _diagnostic_log.error("POST %s: %s", self.path[:300], type(exc).__name__)
+            self.send_json({"ok": False, "error": str(exc)}, error_status(exc))
 
 
 def main() -> None:

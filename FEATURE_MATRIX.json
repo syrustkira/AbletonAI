@@ -145,14 +145,10 @@
     "future_transport": "Later transport option; not Song-Ready blocking."
   },
   "song_ready_status": {
-    "state": "blocked_pending_gate_1_hardening",
-    "reason": "Real Live bridge/selection acceptance succeeded after correcting the Ableton User Library setting, but code review found transaction ownership/Undo isolation and related reliability work that must be completed before trusting mutations on a real song.",
+    "state": "implementation_complete_real_live_acceptance_pending",
+    "reason": "Gate 1 ownership, recovery, Apply revalidation, diagnostics, persistence/concurrency, API and CI controls are implemented and covered by automated regressions. SONG-READY remains pending the disposable real-Live checklist.",
     "blocking_items": [
-      "song/Set-scoped transactions and Undo",
-      "fresh Apply/target revalidation",
-      "Remote Script/User Library doctor",
-      "atomic/thread-safe critical state",
-      "server failure-path hardening and acceptance tests"
+      "user completion of the Gate 1 disposable real-Live acceptance checklist"
     ],
     "non_blocking_later_features": [
       "Audio Evidence",

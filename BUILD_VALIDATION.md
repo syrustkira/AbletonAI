@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **53 PASS** in the final audit sweep
+- unit/regression/lifecycle tests: **59 PASS** in the Gate 1 implementation sweep
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Python test coverage in final audit: **~52% overall**, with `n0te_server.py` at **~33%**; real-Live acceptance remains mandatory
@@ -78,8 +78,10 @@ The first target-Mac/Live acceptance pass produced useful real-world evidence:
 
 This proves the installed bridge/UI can communicate with the user's real Live environment when the correct User Library is configured. It also exposed a diagnostics gap: installation success alone does not prove that Live is using the same User Library path. `docs/ROADMAP.md` therefore makes a Remote Script/User Library Doctor part of the SONG-READY gate.
 
-## Post-audit code-review blocker before SONG-READY
+## Gate 1 implementation status
 
-A follow-up v1.2.4 source review identified a transaction ownership risk that is **not covered by the existing 53-test suite**: recent transaction lookup/Undo is not yet sufficiently scoped to the current song/Set. Until the next hardening pass binds transactions to a verifiable Set/song and adds cross-Set regression tests, N0TE mutations should be tested only in disposable Sets.
+Gate 1 now binds new transactions and simplification experiments to the stable ProjectStore song key, scopes recent context and Undo, rejects legacy/cross-Set ownership guesses, revalidates Apply and recovery targets, and serializes mutations. Atomic state writes, proposal expiry, request limits/status classes, consistent local request policy, and Remote Script diagnostics are automated-test covered.
 
-The canonical next acceptance target is defined in `docs/ROADMAP.md` Gate 1 and `CODEX_SONG_READY_HANDOFF.md`.
+This is **implementation complete / real-Live acceptance pending**, not a SONG-READY claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
+
+Reproducible dependency-free statement-coverage command: `bash scripts/coverage.sh`.

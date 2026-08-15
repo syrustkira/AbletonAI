@@ -5,11 +5,15 @@ from pathlib import Path
 import sys
 import os
 import subprocess
+import threading
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 
-from n0te_core import validate_action, capture_inverse, execute_action, make_transaction, save_transaction, latest_transaction
+from n0te_core import validate_action, capture_inverse, execute_action, make_transaction, save_transaction, latest_transaction, live_object_index
+from n0te_state import atomic_write_json
+from n0te_doctor import remote_script_doctor
 from n0te_library import LibraryIndex, capability_matches, current_set_devices
 from n0te_context import ContextStore
 from n0te_project import ProjectStore, compare_snapshots, finish_checklist
@@ -384,7 +388,8 @@ class HardeningTests(unittest.TestCase):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as td:
             tx_path = Path(td) / "tx.json"
-            tx = {"id": "t1", "inverse_actions": [action("rename_track", string_value="A"), action("rename_track", string_value="B")], "undone": False}
+            store = ProjectStore(Path(td))
+            tx = {"id": "t1", "song_key": store.song_key(SNAP), "actions": [], "inverse_actions": [action("rename_track", string_value="A"), action("rename_track", string_value="B")], "undone": False}
             tx_path.write_text(json.dumps(tx))
             calls = []
             class NoUndoBridge:
@@ -397,7 +402,7 @@ class HardeningTests(unittest.TestCase):
                 if count["n"] == 2:
                     raise RuntimeError("rollback failure")
                 return {"ok": True}
-            with patch.object(server, "latest_transaction", return_value=(tx_path, tx)), patch.object(server, "execute_action", side_effect=fake_execute), patch.object(server, "bridge", NoUndoBridge()), patch.object(server, "invalidate_snapshot", return_value=None):
+            with patch.object(server, "latest_transaction", return_value=(tx_path, tx)), patch.object(server, "execute_action", side_effect=fake_execute), patch.object(server, "bridge", NoUndoBridge()), patch.object(server, "projects", store), patch.object(server, "get_snapshot", return_value=SNAP), patch.object(server, "invalidate_snapshot", return_value=None):
                 result = server.undo_last_n0te()
             self.assertFalse(result["ok"])
             self.assertTrue(result["recovery_required"])
@@ -413,7 +418,7 @@ class ServerWorkflowTests(unittest.TestCase):
             b = FakeBridge()
             snap = json.loads(json.dumps(SNAP))
             proposal = {
-                "created_at": 1,
+                "created_at": time.time(),
                 "signature": "abc",
                 "reply": {
                     "message": "Rename for clarity",
@@ -428,6 +433,72 @@ class ServerWorkflowTests(unittest.TestCase):
                 undone = server.undo_last_n0te()
                 self.assertTrue(undone["ok"])
                 self.assertEqual(b.track["name"], "Kick")
+
+    def test_transactions_are_scoped_and_legacy_is_not_guessed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            save_transaction(root, make_transaction([], [], "a", [], song_key="song-a"))
+            time.sleep(0.01)
+            save_transaction(root, make_transaction([], [], "b", [], song_key="song-b"))
+            legacy = make_transaction([], [], "old", [])
+            save_transaction(root, legacy)
+            self.assertEqual(latest_transaction(root, "song-a")[1]["song_key"], "song-a")
+            self.assertEqual(latest_transaction(root, "song-b")[1]["song_key"], "song-b")
+            self.assertIsNone(latest_transaction(root, "unknown")[1])
+
+    def test_unsaved_transaction_ownership_migrates_on_save_as(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); store = ProjectStore(root)
+            unsaved = json.loads(json.dumps(SNAP)); unsaved["song"]["properties"]["file_path"] = ""
+            old_key = store.song_key(unsaved)
+            save_transaction(root, make_transaction([], [], "abc", [], song_key=old_key))
+            saved = json.loads(json.dumps(unsaved)); saved["song"]["properties"]["file_path"] = "/tmp/New Song.als"
+            new_key = store.song_key(saved)
+            tx = latest_transaction(root, new_key)[1]
+            self.assertIsNotNone(tx)
+            self.assertEqual(tx["ownership_migrated_from"], old_key)
+
+    def test_nested_device_uses_canonical_index_and_validation(self):
+        snap = json.loads(json.dumps(SNAP))
+        snap["set"]["tracks"][0]["devices"][0]["chains"] = [{"devices": [{"id": 501, "name": "Nested"}]}]
+        self.assertIn(501, live_object_index(snap)["devices"])
+        self.assertTrue(validate_action(action("set_device_active", target_id=501), snap)[0])
+
+    def test_cross_set_undo_is_refused(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as td:
+            store = ProjectStore(Path(td))
+            current = json.loads(json.dumps(SNAP))
+            other = json.loads(json.dumps(SNAP)); other["song"]["properties"]["file_path"] = "/tmp/Other.als"
+            save_transaction(Path(td), make_transaction([], [], "abc", [], song_key=store.song_key(other)))
+            with patch.object(server, "STATE", Path(td)), patch.object(server, "projects", store), patch.object(server, "get_snapshot", return_value=current):
+                result = server.undo_last_n0te()
+            self.assertFalse(result["ok"])
+            self.assertIn("another", result["message"])
+
+    def test_atomic_json_concurrent_writers_never_corrupt(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "state.json"
+            threads = [threading.Thread(target=lambda n=n: [atomic_write_json(path, {"writer": n, "sequence": i}) for i in range(30)]) for n in range(6)]
+            for thread in threads: thread.start()
+            for thread in threads: thread.join()
+            value = json.loads(path.read_text())
+            self.assertIn(value["writer"], range(6))
+            self.assertEqual(value["sequence"], 29)
+
+    def test_remote_script_doctor_distinguishes_installed_not_loaded(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); state = home / ".n0te-ableton-ai"; state.mkdir()
+            library = home / "User Library"; remote = library / "Remote Scripts/Ableton_Live_MCP"
+            (remote / "Ableton_Live_MCP").mkdir(parents=True)
+            for path in (remote / "__init__.py", remote / "Ableton_Live_MCP/__init__.py", remote / "Ableton_Live_MCP/bridge.py"):
+                path.write_text("# test")
+            (state / "install_manifest.json").write_text(json.dumps({"ableton_user_library": str(library)}))
+            report = remote_script_doctor(state, home)
+            self.assertTrue(report["files_installed"])
+            self.assertTrue(report["installed_but_not_loaded"])
+            self.assertFalse(report["openai_credential_configured"])
 
     def test_get_snapshot_reads_selected_return_device(self):
         import n0te_server as server

@@ -5,6 +5,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
+from n0te_state import atomic_write_json
 
 
 ALLOWED_KINDS = {
@@ -23,6 +24,42 @@ ALLOWED_KINDS = {
     "set_arrangement_loop",
     "update_midi_clip_notes",
 }
+
+
+def live_object_index(snapshot: dict[str, Any]) -> dict[str, dict[int, dict[str, Any]]]:
+    """Canonical recursive index for exposed tracks, Rack devices and clips."""
+    index: dict[str, dict[int, dict[str, Any]]] = {"tracks": {}, "devices": {}, "clips": {}}
+
+    def devices(rows: list[Any]) -> None:
+        for device in rows:
+            if not isinstance(device, dict):
+                continue
+            if isinstance(device.get("id"), int):
+                index["devices"][device["id"]] = device
+            devices(device.get("devices") or device.get("nested_devices") or [])
+            for chain in device.get("chains") or []:
+                if isinstance(chain, dict):
+                    devices(chain.get("devices") or [])
+
+    tracks = []
+    for group in ("tracks", "return_tracks"):
+        tracks.extend(snapshot.get("set", {}).get(group) or [])
+    master = snapshot.get("set", {}).get("master_track")
+    if isinstance(master, dict):
+        tracks.append(master)
+    for track in tracks:
+        if not isinstance(track, dict):
+            continue
+        if isinstance(track.get("id"), int):
+            index["tracks"][track["id"]] = track
+        devices(track.get("devices") or [])
+        for clip in (track.get("clips") or []) + (track.get("arrangement_clips") or []):
+            if isinstance(clip, dict) and isinstance(clip.get("id"), int):
+                index["clips"][clip["id"]] = clip
+    appointed = snapshot.get("song", {}).get("properties", {}).get("appointed_device")
+    if isinstance(appointed, dict) and isinstance(appointed.get("id"), int):
+        index["devices"][appointed["id"]] = appointed
+    return index
 
 
 def action_schema() -> dict[str, Any]:
@@ -89,25 +126,15 @@ def validate_action(action: dict[str, Any], snapshot: dict[str, Any]) -> tuple[b
         if isinstance(t, dict) and isinstance(t.get("index"), int)
     ]
     valid_track_indices = {t["index"] for t in tracks}
-    device_ids = set()
-    clip_ids = set()
+    objects = live_object_index(snapshot)
+    device_ids = set(objects["devices"])
+    clip_ids = set(objects["clips"])
     all_tracks = tracks + [
         t for t in (snapshot.get("set", {}).get("return_tracks") or []) if isinstance(t, dict)
     ]
     master = snapshot.get("set", {}).get("master_track")
     if isinstance(master, dict):
         all_tracks.append(master)
-    for track in all_tracks:
-        for device in track.get("devices") or []:
-            if isinstance(device, dict) and isinstance(device.get("id"), int):
-                device_ids.add(device["id"])
-        for clip in (track.get("clips") or []) + (track.get("arrangement_clips") or []):
-            if isinstance(clip, dict) and isinstance(clip.get("id"), int):
-                clip_ids.add(clip["id"])
-    appointed = snapshot.get("song", {}).get("properties", {}).get("appointed_device")
-    if isinstance(appointed, dict) and isinstance(appointed.get("id"), int):
-        device_ids.add(appointed["id"])
-
     if kind.startswith("set_track_") or kind == "rename_track" or kind == "set_send_level":
         idx = action.get("track_index")
         if not isinstance(idx, int) or idx not in valid_track_indices:
@@ -350,12 +377,20 @@ def execute_action(bridge, action: dict[str, Any], expected_signature: str | Non
     raise RuntimeError(f"Unsupported action: {kind}")
 
 
-def make_transaction(actions: list[dict[str, Any]], inverses: list[dict[str, Any]], signature: str, results: list[Any], label: str = "N0TE edit") -> dict[str, Any]:
+def make_transaction(actions: list[dict[str, Any]], inverses: list[dict[str, Any]], signature: str,
+                     results: list[Any], label: str = "N0TE edit", *, song_key: str = "",
+                     set_path: str = "", set_identity: str = "", signature_after: str = "",
+                     targets: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     return {
         "id": str(uuid.uuid4()),
         "created_at": time.time(),
         "label": label,
         "set_signature_before": signature,
+        "set_signature_after": signature_after,
+        "song_key": song_key,
+        "set_path": set_path,
+        "set_identity": set_identity,
+        "affected_targets": targets or [],
         "actions": actions,
         "inverse_actions": inverses,
         "results": results,
@@ -367,11 +402,11 @@ def save_transaction(state_dir: Path, tx: dict[str, Any]) -> Path:
     d = state_dir / "transactions"
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{int(tx['created_at'])}_{tx['id']}.json"
-    p.write_text(json.dumps(tx, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(p, tx)
     return p
 
 
-def latest_transaction(state_dir: Path) -> tuple[Path | None, dict[str, Any] | None]:
+def latest_transaction(state_dir: Path, song_key: str | None = None) -> tuple[Path | None, dict[str, Any] | None]:
     d = state_dir / "transactions"
     if not d.exists():
         return None, None
@@ -380,7 +415,9 @@ def latest_transaction(state_dir: Path) -> tuple[Path | None, dict[str, Any] | N
             tx = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if not tx.get("undone"):
+        # Unscoped legacy records remain history, but are never operationally
+        # assigned to the Set that merely happens to be open.
+        if not tx.get("undone") and (song_key is None or tx.get("song_key") == song_key):
             return p, tx
     return None, None
 
@@ -399,6 +436,8 @@ def list_transactions(state_dir: Path, limit: int = 50) -> list[dict[str, Any]]:
                 "created_at": tx.get("created_at"),
                 "label": tx.get("label"),
                 "undone": tx.get("undone", False),
+                "song_key": tx.get("song_key"),
+                "ownership_scoped": bool(tx.get("song_key")),
                 "actions": tx.get("actions") or [],
             })
         except Exception:
