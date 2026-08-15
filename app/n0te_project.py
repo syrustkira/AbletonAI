@@ -141,16 +141,18 @@ class ProjectStore:
 
             if file_path:
                 target = self._saved_key(file_path)
-                continuity = bool(active and (
-                    str(active.get("runtime_token") or "") == self.runtime_token
-                    or (anchor and str(active.get("anchor") or "") == anchor)
-                    or (signature and str(active.get("last_signature") or "") == signature)
-                ))
+                # Process/runtime identity is not Set identity. Automatic Save As
+                # migration requires a stable Song/Set anchor observed on both
+                # sides; signatures may change on save and are not identity proof.
+                continuity = bool(active and anchor and active.get("anchor") and str(active.get("anchor")) == anchor)
                 if continuity and active and active.get("key") and active.get("key") != target:
                     # Saving an unsaved Set can change the set signature. Migrate only
                     # when we have continuity evidence, never from a stale unrelated Set.
                     self._migrate_key(str(active["key"]), target)
-                identity["active_unsaved"] = None
+                # Preserve an unrelated/unproven unsaved Set's ownership. It may
+                # become observable again; never assign its state to this path.
+                if continuity:
+                    identity["active_unsaved"] = None
                 identity["last_saved_key"] = target
                 identity["last_saved_path"] = os.path.abspath(os.path.expanduser(file_path))
                 identity["updated_at"] = time.time()

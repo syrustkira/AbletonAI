@@ -7,6 +7,8 @@ import os
 import subprocess
 import threading
 import time
+import http.client
+import io
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
@@ -449,7 +451,7 @@ class ServerWorkflowTests(unittest.TestCase):
     def test_unsaved_transaction_ownership_migrates_on_save_as(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); store = ProjectStore(root)
-            unsaved = json.loads(json.dumps(SNAP)); unsaved["song"]["properties"]["file_path"] = ""
+            unsaved = json.loads(json.dumps(SNAP)); unsaved["song"]["properties"]["file_path"] = ""; unsaved["song"]["id"] = 900
             old_key = store.song_key(unsaved)
             save_transaction(root, make_transaction([], [], "abc", [], song_key=old_key))
             saved = json.loads(json.dumps(unsaved)); saved["song"]["properties"]["file_path"] = "/tmp/New Song.als"
@@ -457,6 +459,26 @@ class ServerWorkflowTests(unittest.TestCase):
             tx = latest_transaction(root, new_key)[1]
             self.assertIsNotNone(tx)
             self.assertEqual(tx["ownership_migrated_from"], old_key)
+
+    def test_same_runtime_unrelated_saved_set_does_not_take_unsaved_ownership(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); store = ProjectStore(root)
+            unsaved = json.loads(json.dumps(SNAP)); unsaved["song"]["properties"]["file_path"] = ""; unsaved["song"]["id"] = 900
+            old_key = store.song_key(unsaved)
+            save_transaction(root, make_transaction([], [], "abc", [], song_key=old_key))
+            unrelated = json.loads(json.dumps(SNAP)); unrelated["song"]["properties"]["file_path"] = "/tmp/B.als"; unrelated["song"]["id"] = 901
+            unrelated_key = store.song_key(unrelated)
+            self.assertNotEqual(old_key, unrelated_key)
+            self.assertIsNone(latest_transaction(root, unrelated_key)[1])
+            self.assertEqual(latest_transaction(root, old_key)[1]["song_key"], old_key)
+
+    def test_latest_transaction_uses_fractional_creation_time(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            older = make_transaction([], [], "a", [], song_key="song"); older.update({"id": "z", "created_at": 1000.1})
+            newer = make_transaction([], [], "b", [], song_key="song"); newer.update({"id": "a", "created_at": 1000.9})
+            save_transaction(root, older); save_transaction(root, newer)
+            self.assertEqual(latest_transaction(root, "song")[1]["id"], "a")
 
     def test_nested_device_uses_canonical_index_and_validation(self):
         snap = json.loads(json.dumps(SNAP))
@@ -476,6 +498,33 @@ class ServerWorkflowTests(unittest.TestCase):
                 result = server.undo_last_n0te()
             self.assertFalse(result["ok"])
             self.assertIn("another", result["message"])
+
+    def test_undo_reresolves_shifted_track_by_stable_id(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        class ShiftBridge:
+            def __init__(self): self.names = {0: "Other", 1: "N0TE Name"}
+            def request(self, method, params):
+                path = (params.get("ref") or {}).get("path", "")
+                if "tracks " in path:
+                    idx = int(path.split("tracks ", 1)[1].split()[0])
+                    if method == "get": return {"properties": {"name": self.names[idx]}}
+                    if method == "set": self.names[idx] = params["value"]; return {"ok": True}
+                raise AssertionError((method, params))
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); store = ProjectStore(root); bridge = ShiftBridge()
+            snap = json.loads(json.dumps(SNAP)); snap["set"]["tracks"] = [
+                {"index": 0, "id": 99, "name": "Other", "devices": [], "clips": [], "arrangement_clips": []},
+                {"index": 1, "id": 10, "name": "N0TE Name", "devices": [], "clips": [], "arrangement_clips": []},
+            ]
+            forward = action("rename_track", track_index=0, string_value="N0TE Name")
+            inverse = action("rename_track", track_index=0, string_value="Kick")
+            tx = make_transaction([forward], [inverse], "abc", [], song_key=store.song_key(snap), targets=[{"object_type": "track", "object_id": 10, "track_index": 0}])
+            save_transaction(root, tx)
+            with patch.object(server, "STATE", root), patch.object(server, "projects", store), patch.object(server, "bridge", bridge), patch.object(server, "get_snapshot", return_value=snap), patch.object(server, "invalidate_snapshot"):
+                result = server.undo_last_n0te()
+            self.assertTrue(result["ok"])
+            self.assertEqual(bridge.names, {0: "Other", 1: "Kick"})
 
     def test_atomic_json_concurrent_writers_never_corrupt(self):
         with tempfile.TemporaryDirectory() as td:
@@ -600,6 +649,85 @@ class LocalRequestSafetyTests(unittest.TestCase):
         self.assertTrue(server.local_request_allowed("localhost:8766", ""))
         self.assertFalse(server.local_request_allowed("evil.example", "http://evil.example"))
         self.assertFalse(server.local_request_allowed("127.0.0.1:8766", "https://evil.example"))
+
+
+class Gate1ReviewServerTests(unittest.TestCase):
+    def test_expired_proposal_ttl_cleanup(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        with patch.object(server, "proposals", {"old": {"created_at": 1}, "new": {"created_at": 1000}}), patch.object(server, "simplify_proposals", {"old-s": {"created_at": 2}}):
+            server.cleanup_proposals(now=1000)
+            self.assertEqual(set(server.proposals), {"new"})
+            self.assertEqual(server.simplify_proposals, {})
+
+    def _request(self, path, body=b"{}", headers=None, content_length=None):
+        import n0te_server as server
+        httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True); thread.start()
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port, timeout=3)
+            conn.putrequest("POST", path, skip_host=True)
+            conn.putheader("Host", "127.0.0.1:8766")
+            for key, value in (headers or {}).items(): conn.putheader(key, value)
+            conn.putheader("Content-Length", content_length if content_length is not None else len(body))
+            conn.endheaders(body if body else None)
+            response = conn.getresponse(); payload = response.read(); conn.close()
+            return response.status, payload
+        finally:
+            httpd.shutdown(); httpd.server_close(); thread.join()
+
+    def test_malformed_json_is_400(self):
+        self.assertEqual(self._request("/api/config", b"{")[0], 400)
+
+    def test_oversized_body_is_413(self):
+        import n0te_server as server
+        self.assertEqual(self._request("/api/config", b"", content_length=server.MAX_REQUEST_BODY + 1)[0], 413)
+
+    def test_unknown_proposal_and_route_are_404(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        with patch.object(server, "proposals", {}):
+            self.assertEqual(self._request("/api/apply", b'{"proposal_id":"missing"}')[0], 404)
+        self.assertEqual(self._request("/api/not-a-route")[0], 404)
+
+    def test_stale_conflict_is_409(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        with patch.object(server, "apply_proposal", side_effect=server.ConflictError("stale")):
+            self.assertEqual(self._request("/api/apply", b'{"proposal_id":"p"}')[0], 409)
+
+    def test_unavailable_dependency_is_503(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        with patch.object(server, "apply_proposal", side_effect=ConnectionError("bridge offline")):
+            self.assertEqual(self._request("/api/apply", b'{"proposal_id":"p"}')[0], 503)
+
+    def test_nonlocal_origin_is_403(self):
+        self.assertEqual(self._request("/api/config", headers={"Origin": "https://evil.example"})[0], 403)
+
+    def test_simplification_failure_status_classes(self):
+        import n0te_server as server
+        self.assertEqual(server.error_status(LookupError("expired")), 404)
+        self.assertEqual(server.error_status(server.ConflictError("stale")), 409)
+        self.assertEqual(server.error_status(ConnectionError("bridge")), 503)
+
+    def test_ambiguous_simplification_never_calls_native_undo(self):
+        import n0te_server as server
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); store = ProjectStore(root)
+            before = json.loads(json.dumps(SNAP)); before["view"]["properties"]["selected_track"] = {"id": 10}
+            after = json.loads(json.dumps(before)); after["set"]["tracks"] += [
+                {"id": 20, "index": 2, "name": "Copy 1", "devices": []},
+                {"id": 21, "index": 3, "name": "Copy 2", "devices": []},
+            ]
+            proposal = {"created_at": time.time(), "signature": "abc", "song_key": store.song_key(before), "track_index": 0, "result": {"plan": {"replacements": [{"recommendation": "replace", "can_build_experiment": True, "replacement_source": "ableton_native"}]}}}
+            class DuplicateBridge:
+                def request(self, method, params): return {"ok": True}
+            with patch.object(server, "STATE", root), patch.object(server, "projects", store), patch.object(server, "bridge", DuplicateBridge()), patch.object(server, "simplify_proposals", {"s": proposal}), patch.object(server, "get_snapshot", side_effect=[before, after]), patch.object(server, "invalidate_snapshot"), patch.object(server, "native_undo") as native:
+                with self.assertRaises(server.ConflictError): server.build_simplify_experiment("s")
+            native.assert_not_called()
+            self.assertEqual(len(list((root / "recovery").glob("*.json"))), 1)
 
 
 if __name__ == "__main__":

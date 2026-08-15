@@ -7,10 +7,10 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **59 PASS** in the Gate 1 implementation sweep
+- unit/regression/lifecycle tests: **71 PASS** in the Gate 1 review-correction sweep
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
-- Python test coverage in final audit: **~52% overall**, with `n0te_server.py` at **~33%**; real-Live acceptance remains mandatory
+- Python test coverage in final audit: **~52% overall**, with `n0te_server.py` at **~43%**; real-Live acceptance remains mandatory
 
 ## Installer-specific regressions covered
 
@@ -80,7 +80,7 @@ This proves the installed bridge/UI can communicate with the user's real Live en
 
 ## Gate 1 implementation status
 
-Gate 1 now binds new transactions and simplification experiments to the stable ProjectStore song key, scopes recent context and Undo, rejects legacy/cross-Set ownership guesses, revalidates Apply and recovery targets, and serializes mutations. Atomic state writes, proposal expiry, request limits/status classes, consistent local request policy, and Remote Script diagnostics are automated-test covered.
+Gate 1 now binds new transactions and simplification experiments to the stable ProjectStore song key, scopes recent context and Undo, rejects legacy/cross-Set ownership guesses, revalidates Apply and recovery targets, and serializes mutations. Review regressions additionally prove Set-anchor-only Save As migration, same-process unrelated-Set isolation, stable-ID Undo after track index shifts, deterministic same-second transaction chronology, and fail-closed ambiguous simplification recovery without native Undo. Atomic state writes, proposal expiry, malformed/oversized request handling, 404/409/503 failure classes, consistent local Host/Origin rejection, and Remote Script diagnostics are automated-test covered.
 
 This is **implementation complete / real-Live acceptance pending**, not a SONG-READY claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
 

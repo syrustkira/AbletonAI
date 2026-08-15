@@ -313,6 +313,10 @@ class ConflictError(RuntimeError):
     """Current Live evidence no longer matches an approved operation."""
 
 
+class DependencyUnavailableError(RuntimeError):
+    """A required local or network dependency is unavailable."""
+
+
 def cleanup_proposals(now: float | None = None) -> None:
     cutoff = (now or time.time()) - PROPOSAL_TTL_SECONDS
     with _proposal_lock:
@@ -388,7 +392,7 @@ def recovery_conflicts(live_bridge, tx: dict[str, Any], snapshot: dict[str, Any]
     for row in evidence:
         if row.get("object_type") == "track":
             match = next((t for t in tracks if t.get("id") == row.get("object_id")), None)
-            if not match or match.get("index") != row.get("track_index"):
+            if not match:
                 errors.append(f"track target {row.get('object_id')} no longer matches")
     for action in tx.get("actions") or []:
         try:
@@ -397,6 +401,26 @@ def recovery_conflicts(live_bridge, tx: dict[str, Any], snapshot: dict[str, Any]
                 errors.append(f"affected target for {action.get('kind')} changed incompatibly")
         except Exception as exc:
             errors.append(f"cannot revalidate {action.get('kind')}: {exc}")
+    return errors
+
+
+def reresolve_transaction_tracks(tx: dict[str, Any], snapshot: dict[str, Any]) -> list[str]:
+    """Rewrite volatile track indexes from journaled stable Track IDs."""
+    tracks = snapshot.get("set", {}).get("tracks") or []
+    errors = []
+    evidence = tx.get("affected_targets") or []
+    for position, row in enumerate(evidence):
+        if row.get("object_type") != "track" or row.get("object_id") is None:
+            continue
+        match = next((track for track in tracks if track.get("id") == row["object_id"]), None)
+        if not match or not isinstance(match.get("index"), int):
+            errors.append(f"track target {row['object_id']} is no longer resolvable")
+            continue
+        for key in ("actions", "inverse_actions"):
+            actions = tx.get(key) or []
+            if position < len(actions) and str(actions[position].get("kind", "")).startswith(("set_track_", "rename_track")):
+                actions[position]["track_index"] = match["index"]
+        row["track_index"] = match["index"]
     return errors
 
 
@@ -414,7 +438,7 @@ def extract_output_text(response: dict[str, Any]) -> str:
 def openai_structured(instructions: str, user_text: str, schema_name: str, schema: dict[str, Any], max_output_tokens: int = 2600) -> dict[str, Any]:
     key = get_api_key()
     if not key:
-        raise RuntimeError("OpenAI API key is not configured. Open Settings and save a project API key.")
+        raise DependencyUnavailableError("OpenAI API key is not configured. Open Settings and save a project API key.")
     model = load_config().get("model") or "gpt-5.6"
     payload = {
         "model": model,
@@ -686,7 +710,8 @@ def _undo_last_n0te_locked() -> dict[str, Any]:
         invalidate_snapshot()
         return {"ok": True, "transaction": tx["id"], "message": "N0TE experiment track removed; original was never altered."}
 
-    unsafe = recovery_conflicts(bridge, tx, snap)
+    unsafe = reresolve_transaction_tracks(tx, snap)
+    unsafe.extend(recovery_conflicts(bridge, tx, snap))
     if unsafe:
         return {"ok": False, "message": "Unsafe N0TE recovery refused: " + "; ".join(unsafe), "recovery_required": True}
     results, errors = [], []
@@ -880,22 +905,22 @@ def build_simplify_experiment(proposal_id: str) -> dict[str, Any]:
     cleanup_proposals()
     prop = simplify_proposals.get(proposal_id)
     if not prop:
-        raise RuntimeError("Unknown or expired simplification proposal.")
+        raise LookupError("Unknown or expired simplification proposal.")
     before = get_snapshot(force=True)
     song_key = projects.song_key(before)
     if prop.get("song_key") and prop.get("song_key") != song_key:
         raise ConflictError("This simplification proposal belongs to another Live Set.")
     if before.get("set", {}).get("set_signature") != prop.get("signature"):
-        raise RuntimeError("The set changed after the simplification analysis. Re-analyze before building an experiment.")
+        raise ConflictError("The set changed after the simplification analysis. Re-analyze before building an experiment.")
     track_idx = selected_track_index(before)
     if track_idx is None or track_idx != prop.get("track_index"):
-        raise RuntimeError("The selected track changed. Re-analyze the intended track first.")
+        raise ConflictError("The selected track changed. Re-analyze the intended track first.")
     replacements = [
         r for r in prop["result"]["plan"].get("replacements") or []
         if r.get("recommendation") == "replace" and r.get("can_build_experiment") and r.get("replacement_source") == "ableton_native"
     ]
     if not replacements:
-        raise RuntimeError("This plan has no native replacement candidates safe enough to build automatically.")
+        raise ConflictError("This plan has no native replacement candidates safe enough to build automatically.")
 
     before_ids = {t.get("id") for t in before.get("set", {}).get("tracks") or [] if isinstance(t, dict)}
     original = selected_context(before) or {}
@@ -907,12 +932,19 @@ def build_simplify_experiment(proposal_id: str) -> dict[str, Any]:
     after_dup = get_snapshot(force=True)
     new_tracks = [t for t in after_dup.get("set", {}).get("tracks") or [] if isinstance(t, dict) and t.get("id") not in before_ids]
     if len(new_tracks) != 1:
-        # Fail closed; if Live created something but we cannot identify it, native Undo is the safest fallback.
-        try:
-            native_undo()
-        except Exception:
-            pass
-        raise RuntimeError("Could not uniquely identify the duplicated track; the duplication was undone if possible.")
+        recovery = {
+            "created_at": time.time(), "operation": "simplification_experiment",
+            "proposal_id": proposal_id, "song_key": song_key,
+            "reason": "duplicated track could not be uniquely identified",
+            "candidate_track_ids": [track.get("id") for track in new_tracks],
+            "recovery_required": True,
+        }
+        recovery_path = STATE / "recovery" / f"simplify_{time.time_ns()}.json"
+        atomic_write_json(recovery_path, recovery)
+        raise ConflictError(
+            f"Could not uniquely identify the duplicated track. No automatic Ableton Undo was invoked; "
+            f"review the Set manually. Recovery record: {recovery_path}"
+        )
     new_track = new_tracks[0]
     new_idx = new_track.get("index")
     new_id = new_track.get("id")
@@ -1194,7 +1226,7 @@ def error_status(exc: Exception) -> int:
         return 404
     if isinstance(exc, ConflictError):
         return 409
-    if isinstance(exc, (ConnectionError, TimeoutError, urllib.error.URLError)):
+    if isinstance(exc, (DependencyUnavailableError, ConnectionError, TimeoutError, urllib.error.URLError, OSError)):
         return 503
     return 500
 

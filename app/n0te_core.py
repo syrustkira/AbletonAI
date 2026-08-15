@@ -401,7 +401,8 @@ def make_transaction(actions: list[dict[str, Any]], inverses: list[dict[str, Any
 def save_transaction(state_dir: Path, tx: dict[str, Any]) -> Path:
     d = state_dir / "transactions"
     d.mkdir(parents=True, exist_ok=True)
-    p = d / f"{int(tx['created_at'])}_{tx['id']}.json"
+    created_ns = int(float(tx["created_at"]) * 1_000_000_000)
+    p = d / f"{created_ns:020d}_{tx['id']}.json"
     atomic_write_json(p, tx)
     return p
 
@@ -410,7 +411,8 @@ def latest_transaction(state_dir: Path, song_key: str | None = None) -> tuple[Pa
     d = state_dir / "transactions"
     if not d.exists():
         return None, None
-    for p in sorted(d.glob("*.json"), reverse=True):
+    candidates = []
+    for p in d.glob("*.json"):
         try:
             tx = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
@@ -418,7 +420,16 @@ def latest_transaction(state_dir: Path, song_key: str | None = None) -> tuple[Pa
         # Unscoped legacy records remain history, but are never operationally
         # assigned to the Set that merely happens to be open.
         if not tx.get("undone") and (song_key is None or tx.get("song_key") == song_key):
-            return p, tx
+            # JSON creation time is canonical. mtime and filename provide a
+            # deterministic compatibility fallback for malformed legacy rows.
+            try:
+                created = float(tx.get("created_at"))
+            except (TypeError, ValueError):
+                created = 0.0
+            candidates.append(((created, p.stat().st_mtime_ns, p.name), p, tx))
+    if candidates:
+        _, path, transaction = max(candidates, key=lambda row: row[0])
+        return path, transaction
     return None, None
 
 
