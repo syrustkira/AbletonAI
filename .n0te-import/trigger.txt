@@ -1,1 +1,1 @@
-Trigger canonical N0TE v1.2.4 import after fixing per-chunk Base64 decoding.
+Publish verified canonical N0TE v1.2.4 source tree.
