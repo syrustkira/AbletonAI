@@ -10,10 +10,12 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 
-from n0te_capabilities import Capability, CapabilityRegistry, ComponentState
+from n0te_capabilities import Capability, CapabilityRegistry, ComponentState, SolutionTier
 from n0te_network import NetworkMode, NetworkPolicy
 import n0te_provider as provider
 import n0te_server as server
+import n0te_discovery as discovery
+import n0te_gemini_native as gemini
 
 
 class FakeAdapter:
@@ -100,6 +102,69 @@ class OfflineFoundationTests(unittest.TestCase):
         self.assertEqual(status["services"]["ai"]["state"], "OFF")
         self.assertEqual(status["services"]["network"]["mode"], "OFFLINE")
         self.assertEqual(status["services"]["community"]["state"], "OFF")
+
+    def test_offline_discovery_surfaces_make_zero_network_attempts(self):
+        policy = NetworkPolicy(NetworkMode.OFFLINE)
+        with patch.object(discovery.urllib.request, "urlopen") as network:
+            openverse = discovery.search_openverse("kick", network_policy=policy)
+            freesound = discovery.search_freesound("kick", "secret", network_policy=policy)
+        self.assertIn("OFFLINE", openverse["error"])
+        self.assertIn("OFFLINE", freesound["error"])
+        network.assert_not_called()
+
+    def test_provider_models_and_connection_paths_obey_offline_policy(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); config = root / "config.json"
+            config.write_text(json.dumps({"network_mode": "offline"}))
+            with patch.object(provider, "CONFIG_PATH", config), patch.object(provider, "_ORIGINAL_URLOPEN") as network:
+                with self.assertRaises(PermissionError):
+                    provider._models_for("openai", "", "secret")
+                with self.assertRaises(PermissionError):
+                    provider._test_provider("openai", "model", "", "secret")
+                network.assert_not_called()
+
+    def test_lan_requires_literal_private_or_loopback_address(self):
+        policy = NetworkPolicy(NetworkMode.LAN)
+        self.assertTrue(policy.decide("http://10.1.2.3/service").allowed)
+        self.assertTrue(policy.decide("http://[::1]:8765").allowed)
+        self.assertFalse(policy.decide("https://printer.local/service").allowed)
+        self.assertFalse(policy.decide("https://example.com/service").allowed)
+
+    def test_collaboration_requires_per_request_approval(self):
+        policy = NetworkPolicy(NetworkMode.COLLABORATION)
+        self.assertFalse(policy.decide("https://collab.example/session").allowed)
+        self.assertTrue(policy.decide("https://collab.example/session", collaboration=True).allowed)
+
+    def test_native_gemini_path_obeys_offline_before_transport(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); config = root / "config.json"
+            config.write_text(json.dumps({"network_mode": "offline"}))
+            with patch.object(provider, "CONFIG_PATH", config), patch.object(provider, "_ORIGINAL_URLOPEN") as network:
+                with self.assertRaises(PermissionError):
+                    gemini._send_native(provider, "secret", "model", {"contents": []}, 10)
+                network.assert_not_called()
+
+    def test_capability_ranking_is_explicit_not_registration_order(self):
+        registry = CapabilityRegistry()
+        external = FakeAdapter("a-external", ComponentState.READY, [Capability(
+            "compress", local=False, cost_class="metered", solution_tier=SolutionTier.OPTIONAL_EXTERNAL,
+            reliability=100, portability=100)])
+        native = FakeAdapter("z-native", ComponentState.READY, [Capability(
+            "compress", solution_tier=SolutionTier.DAW_NATIVE, reliability=70, portability=80)])
+        registry.register(external); registry.register(native)
+        self.assertIs(registry.resolve("compress", allow_remote=True, allow_cost=True), native)
+
+    def test_ranking_uses_reliability_then_portability_with_stable_tie_break(self):
+        registry = CapabilityRegistry()
+        low = FakeAdapter("low", ComponentState.READY, [Capability("meter", reliability=40, portability=100)])
+        high = FakeAdapter("high", ComponentState.READY, [Capability("meter", reliability=90, portability=20)])
+        registry.register(low); registry.register(high)
+        self.assertIs(registry.resolve("meter"), high)
+        registry.unregister("high")
+        equal_b = FakeAdapter("b", ComponentState.READY, [Capability("meter", reliability=40, portability=100)])
+        equal_a = FakeAdapter("a", ComponentState.READY, [Capability("meter", reliability=40, portability=100)])
+        registry.register(equal_b); registry.register(equal_a)
+        self.assertIs(registry.resolve("meter"), equal_a)
 
 
 if __name__ == "__main__":

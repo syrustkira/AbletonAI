@@ -11,3 +11,7 @@ Reconnect changes availability only. It does not grant consent, select a paid/cl
 ## Boundaries
 
 This milestone migrates the AI provider router. Discovery and other networking paths must migrate before strict OFFLINE can be described as globally enforced. The capability registry is implemented and tested, but existing DAW/library integrations are not yet adapters. Gate 1 mutation authority is unchanged.
+
+## Follow-up implementation
+
+Current runtime AI, native Gemini, provider model/test, Openverse, and Freesound transports now consume NetworkPolicy. Installer download remains an explicit installation operation rather than a background runtime path. Deterministic AI-OFF jobs reuse the existing proposal registry and Gate 1 Apply boundary; capability selection uses explicit solution-tier ranking rather than registration order.

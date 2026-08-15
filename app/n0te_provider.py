@@ -320,6 +320,7 @@ def _read_http_error(exc: urllib.error.HTTPError) -> str:
 
 def _chat_request(provider: str, base_url: str, key: str, chat_payload: dict[str, Any], schema_info: dict[str, Any] | None, timeout: float = 90) -> dict[str, Any]:
     endpoint = _provider_endpoint(provider, base_url)
+    NetworkPolicy.from_value(_load_json(CONFIG_PATH).get("network_mode", "full")).require(endpoint)
     url = endpoint + "/chat/completions"
 
     def send(body: dict[str, Any]) -> dict[str, Any]:
@@ -424,6 +425,7 @@ def routed_urlopen(req_or_url: Any, data: Any = None, timeout: Any = socket._GLO
 
 def _models_for(provider: str, base_url: str, key: str, timeout: float = 15) -> list[str]:
     endpoint = _provider_endpoint(provider, base_url)
+    NetworkPolicy.from_value(_load_json(CONFIG_PATH).get("network_mode", "full")).require(endpoint)
     req = urllib.request.Request(endpoint + "/models", headers=_authorization_headers(provider, key), method="GET")
     try:
         with _ORIGINAL_URLOPEN(req, timeout=timeout) as response:

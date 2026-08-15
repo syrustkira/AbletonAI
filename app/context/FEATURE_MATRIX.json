@@ -151,6 +151,48 @@
       "ableton": "Live remains the first deep integration",
       "n0te_role": "typed/versioned runtime registry with explicit privacy, cost, and mutation escalation",
       "status": "partially_implemented"
+    },
+    {
+      "feature": "Deterministic AI-OFF intent and Job Engine",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Producer-language routing for bounded existing operations; mutations remain proposal/approval gated",
+      "status": "implemented"
+    },
+    {
+      "feature": "Guided Manual execution plans",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "First-class safe outcome for unsupported or ambiguous operations",
+      "status": "implemented"
+    },
+    {
+      "feature": "Ranked capability resolution",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Explicit current-project/native/owned/orchestration/external/manual hierarchy with privacy/cost/authority filters",
+      "status": "implemented"
+    },
+    {
+      "feature": "Evidence-backed tool profiles",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Durable local characterization profiles; unknown mappings fail to Guided Manual",
+      "status": "implemented"
+    },
+    {
+      "feature": "Event Engine and N0TE MARK",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Durable bounded Song/workspace-attributed creative events and MARKs",
+      "status": "implemented"
+    },
+    {
+      "feature": "Private Notebook and Vault",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Durable local notes with explicit context opt-in and fail-closed Private Vault",
+      "status": "implemented"
+    },
+    {
+      "feature": "N0TE SAFE authority freeze",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Persistent mutation/remote authority revocation without automatic Undo",
+      "status": "partially_implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

@@ -17,6 +17,18 @@ class ComponentState(str, Enum):
     RECOVERING = "RECOVERING"
 
 
+class SolutionTier(str, Enum):
+    CURRENT_PROJECT = "CURRENT_PROJECT"
+    DAW_NATIVE = "DAW_NATIVE"
+    OWNED_TOOL = "OWNED_TOOL"
+    OWNED_COMBINATION = "OWNED_COMBINATION"
+    OS_NATIVE = "OS_NATIVE"
+    N0TE_ORCHESTRATION = "N0TE_ORCHESTRATION"
+    N0TE_GAP_FILL = "N0TE_GAP_FILL"
+    OPTIONAL_EXTERNAL = "OPTIONAL_EXTERNAL"
+    GUIDED_MANUAL = "GUIDED_MANUAL"
+
+
 @dataclass(frozen=True)
 class Capability:
     name: str
@@ -24,6 +36,11 @@ class Capability:
     local: bool = True
     mutation_authority: bool = False
     cost_class: str = "none"
+    solution_tier: SolutionTier = SolutionTier.N0TE_ORCHESTRATION
+    owned: bool = True
+    portability: int = 50
+    reliability: int = 50
+    user_interaction: int = 0
 
 
 class CapabilityAdapter(Protocol):
@@ -51,6 +68,8 @@ class CapabilityRegistry:
     def resolve(self, name: str, *, allow_remote: bool = False, allow_cost: bool = False, allow_mutation: bool = False) -> CapabilityAdapter | None:
         with self._lock:
             adapters = tuple(self._adapters.values())
+        ranked: list[tuple[tuple[int, ...], str, CapabilityAdapter]] = []
+        tier_rank = {tier: position for position, tier in enumerate(SolutionTier)}
         for adapter in adapters:
             if adapter.health() is not ComponentState.READY:
                 continue
@@ -63,8 +82,12 @@ class CapabilityRegistry:
                     continue
                 if capability.mutation_authority and not allow_mutation:
                     continue
-                return adapter
-        return None
+                rank = (tier_rank[capability.solution_tier], 0 if capability.local else 1,
+                        0 if capability.cost_class == "none" else 1, 0 if not capability.mutation_authority else 1,
+                        0 if capability.owned else 1, -max(0, min(capability.reliability, 100)),
+                        -max(0, min(capability.portability, 100)), max(0, capability.user_interaction))
+                ranked.append((rank, adapter.adapter_id, adapter))
+        return min(ranked, default=((), "", None))[2]
 
     def status(self) -> list[dict[str, object]]:
         with self._lock:

@@ -43,6 +43,8 @@ from n0te_state import atomic_write_json
 from n0te_doctor import remote_script_doctor
 from n0te_provider import provider_status
 from n0te_network import NetworkPolicy
+from n0te_intent import IntentRouter
+from n0te_safety import SafetyController
 
 APP_VERSION = "1.2.4"
 HOST = "127.0.0.1"
@@ -62,6 +64,8 @@ bridge = AbletonBridge()
 context_store = ContextStore(HERE / "context" / "N0TE_CONTEXT_PACK.json", STATE)
 library = LibraryIndex(STATE)
 projects = ProjectStore(STATE)
+intent_router = IntentRouter()
+safety = SafetyController(STATE)
 proposals: dict[str, dict[str, Any]] = {}
 simplify_proposals: dict[str, dict[str, Any]] = {}
 _snapshot_lock = threading.Lock()
@@ -522,7 +526,7 @@ def ask_openai(user_text: str, snap: dict[str, Any]) -> dict[str, Any]:
                 user_text, bridge, library, snap, include_web=True,
                 openverse_token=get_secret("openverse_token"),
                 freesound_key=get_secret("freesound_api_key"),
-                web_threshold=6,
+                web_threshold=6, network_policy=NetworkPolicy.from_value(config.get("network_mode")),
             )
         except Exception as exc:
             discovery_context = {"error": str(exc), "query": user_text}
@@ -622,8 +626,21 @@ Use evidence_labels to distinguish Live-state fact, audio measurement, inference
     return result
 
 
+def deterministic_reply(user_text: str, snap: dict[str, Any]) -> dict[str, Any]:
+    plan = intent_router.route(user_text, snap, projects.load_song(snap))
+    return {
+        "message": plan.message,
+        "decision_summary": plan.job.goal,
+        "actions": plan.actions,
+        "execution_plan": plan.payload(),
+        "evidence": ["Deterministic AI-OFF intent routing; no model provider was invoked."],
+        "needs_audio": False,
+    }
+
+
 def apply_proposal(proposal_id: str) -> dict[str, Any]:
     with _mutation_lock:
+        safety.require_mutation_authority()
         cleanup_proposals()
         prop = _proposal_get(proposals, proposal_id)
         if not prop:
@@ -1272,6 +1289,8 @@ def local_request_allowed(host: str, origin: str = "") -> bool:
 
 
 def error_status(exc: Exception) -> int:
+    if isinstance(exc, PermissionError):
+        return 403
     if isinstance(exc, OverflowError):
         return 413
     if isinstance(exc, (ValueError, json.JSONDecodeError)):
@@ -1368,7 +1387,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if not text:
                     raise RuntimeError("Message is empty.")
                 snap = get_snapshot(force=True)
-                reply = ask_openai(text, snap)
+                ai_off = str(load_config().get("ai_provider") or "openai").lower() in {"off", "none"}
+                reply = deterministic_reply(text, snap) if ai_off else ask_openai(text, snap)
                 pid = str(int(time.time() * 1000))
                 cleanup_proposals()
                 with _proposal_lock:
@@ -1392,6 +1412,17 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == "/api/undo_live":
                 with _mutation_lock:
                     return self.send_json(native_undo())
+
+            if self.path == "/api/safe":
+                data = self.body_json()
+                enabled = bool(data.get("enabled", True))
+                if enabled:
+                    state = safety.enter(str(data.get("reason") or "user"))
+                    with _proposal_lock:
+                        proposals.clear(); simplify_proposals.clear()
+                else:
+                    state = safety.leave(explicit_user_confirmation=bool(data.get("confirm")))
+                return self.send_json({"ok": True, "safety": state})
 
             if self.path == "/api/refresh":
                 snap = get_snapshot(force=True)
@@ -1430,6 +1461,7 @@ class Handler(SimpleHTTPRequestHandler):
                     freesound_key=get_secret("freesound_api_key"),
                     web_threshold=int(data.get("web_threshold") or 6),
                     license_filter=str(data.get("license_filter") or ""),
+                    network_policy=NetworkPolicy.from_value(load_config().get("network_mode")),
                 )
                 return self.send_json({"ok": True, "result": result})
 
