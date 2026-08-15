@@ -241,6 +241,42 @@
       "ableton": "host workspace or not applicable",
       "n0te_role": "Durable classified knowledge with protected deterministic pruning",
       "status": "implemented"
+    },
+    {
+      "feature": "Observability Engine",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Truthful compact/detailed process and component health; unsupported external metrics explicitly absent",
+      "status": "implemented"
+    },
+    {
+      "feature": "Musical Panic portable core",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Generated MIDI state and confirmed-execution panic planning; host execution acceptance pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Artist World",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Atomic advisory identity/visual/sonic/voice/content guidance with explicit ignore modes",
+      "status": "implemented"
+    },
+    {
+      "feature": "Creator Engine local lifecycle",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Local content projects with fail-closed PUBLIC authority validation",
+      "status": "implemented"
+    },
+    {
+      "feature": "Deterministic content recipes",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "AI-OFF Song section/MARK timeline planning",
+      "status": "implemented"
+    },
+    {
+      "feature": "Quick Edit model",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Production-aware EDL operations and aspect presets; renderer acceptance pending",
+      "status": "implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

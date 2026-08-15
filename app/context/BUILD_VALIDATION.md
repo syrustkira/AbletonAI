@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **149 PASS**, including Song/workspace, graph/portability, recovery/guardian, version/sync and knowledge lifecycle regressions
+- unit/regression/lifecycle tests: **155 PASS**, including observability, Musical Panic, Artist World, Creator, recipes and Quick Edit regressions
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Reproducible coverage: **PASS**; real-Live acceptance remains mandatory
