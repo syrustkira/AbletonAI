@@ -7,10 +7,10 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **86 PASS** after the Gate 1 Remote Script Doctor layout hotfix
+- unit/regression/lifecycle tests: **92 PASS** after the plug-and-play AI provider switchboard addition
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
-- Python test coverage in final audit: **~52% overall**, with `n0te_server.py` at **~46%**; real-Live acceptance remains mandatory
+- Reproducible coverage on the provider-switchboard head: `n0te_provider.py` **~46%**, `n0te_server.py` **~47%**; real-Live acceptance remains mandatory
 
 ## Installer-specific regressions covered
 
@@ -34,6 +34,16 @@
 - offline companion status remains usable instead of collapsing to a generic server error
 - Remote Script Doctor accepts the pinned upstream root layout (`Ableton_Live_MCP/__init__.py` + `bridge.py`) and rejects an accidental duplicate nested `Ableton_Live_MCP` folder
 
+## AI provider switchboard regressions covered
+
+- Gemini resolves through Google's OpenAI-compatible endpoint
+- Ollama resolves through the local OpenAI-compatible endpoint
+- remote custom endpoints cannot use plaintext HTTP; localhost may
+- existing Responses-style structured requests are translated to Chat Completions while retaining the JSON Schema contract
+- Chat Completions structured output is converted back into N0TE's existing response shape
+- Gemini routing uses the Gemini credential and does not forward the OpenAI bearer credential
+- provider selection is explicit; no automatic paid-provider fallback is enabled
+
 ## Hardening carried from 1.2.1+
 
 - stable unsaved Set identity and save migration
@@ -54,7 +64,8 @@
 - Ableton Live loading the Remote Script in the user's exact Live version/edition
 - Max for Live AgentAudioTap build/install on the user's machine
 - real third-party plugin parameter exposure
-- OpenAI/Freesound/Openverse availability and user credentials
+- availability/quota of any selected cloud AI provider or user credential
+- quality/performance of a selected local Ollama model on the user's Mac
 - real audio analysis, because that N0TE layer is not implemented yet
 
 ## Deliberately not claimed in 1.2.4
@@ -86,6 +97,8 @@ Gate 1 now binds new transactions and simplification experiments to the stable P
 The closure sweep proves execute-success is journaled before fallible post-observation, same-path/different-Set targetless Undo refusal, actual coerced post-state recovery, serialization of explicit native Undo, locked proposal registries and song-state read/modify/write, parent-directory fsync, and offline-safe/credential-complete/latest-outcome Doctor behavior. Set ownership requires the scoped N0TE song key plus a matching recorded/current Live Set-session identity; saved path, process token, signature, or raw index alone is insufficient.
 
 The real-Live acceptance pass additionally caught and corrected a Doctor-only false negative: the pinned Remote Script is installed directly as `Remote Scripts/Ableton_Live_MCP/{__init__.py,bridge.py}`. The Doctor now validates that actual installer/upstream layout rather than requiring an extra nested package directory.
+
+The provider switchboard is transport-only. It does not widen the Ableton action whitelist or bypass proposal validation, approval, mutation serialization, journaling, Set ownership, or N0TE Undo safety. Cloud-provider availability and local-model quality remain real-machine acceptance concerns.
 
 This is **implementation complete / real-Live acceptance pending**, not a SONG-READY claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
 
