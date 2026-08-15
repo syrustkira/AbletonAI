@@ -25,14 +25,20 @@ class MemoryResponse:
 
 
 class GeminiNativeTests(unittest.TestCase):
-    def provider(self, response_payload):
-        seen = {}
+    def provider(self, response_payloads):
+        payloads = list(response_payloads) if isinstance(response_payloads, list) else [response_payloads]
+        seen = {"requests": []}
         def urlopen(req, timeout=0):
-            seen["url"] = req.full_url
-            seen["headers"] = {k.lower(): v for k, v in req.header_items()}
-            seen["body"] = json.loads(req.data.decode("utf-8"))
-            seen["timeout"] = timeout
-            return MemoryResponse(response_payload)
+            if not payloads:
+                raise AssertionError("Unexpected extra Gemini request")
+            row = {
+                "url": req.full_url,
+                "headers": {k.lower(): v for k, v in req.header_items()},
+                "body": json.loads(req.data.decode("utf-8")),
+                "timeout": timeout,
+            }
+            seen["requests"].append(row)
+            return MemoryResponse(payloads.pop(0))
         module = SimpleNamespace(
             _ORIGINAL_URLOPEN=urlopen,
             _read_http_error=lambda exc: "http error",
@@ -41,48 +47,115 @@ class GeminiNativeTests(unittest.TestCase):
         )
         return module, seen
 
-    def test_native_gemini_uses_json_schema_and_google_key_header(self):
-        provider, seen = self.provider({
-            "candidates": [{"content": {"parts": [{"text": '{"decision":"keep","actions":[]}'}]}}]
-        })
-        schema = {
+    def schema(self):
+        return {
             "type": "object",
             "properties": {"decision": {"type": "string"}, "actions": {"type": "array", "items": {"type": "object"}}},
             "required": ["decision", "actions"],
             "additionalProperties": False,
         }
-        chat = {
+
+    def chat(self, max_tokens=700):
+        return {
             "model": "gemini-3.5-flash",
             "messages": [
                 {"role": "system", "content": "Return a N0TE decision."},
                 {"role": "user", "content": "Inspect the selected track."},
             ],
             "temperature": 0.2,
-            "max_tokens": 700,
+            "max_tokens": max_tokens,
         }
-        result = gemini.gemini_native_chat(provider, "google-secret", chat, {"name": "reply", "schema": schema, "strict": True}, 12)
-        self.assertEqual(result["provider_bridge"], "gemini-native")
-        self.assertIn("models/gemini-3.5-flash:generateContent", seen["url"])
-        self.assertEqual(seen["headers"].get("x-goog-api-key"), "google-secret")
-        self.assertNotIn("authorization", seen["headers"])
-        self.assertEqual(seen["body"]["generationConfig"]["responseMimeType"], "application/json")
-        self.assertEqual(seen["body"]["generationConfig"]["responseJsonSchema"], schema)
-        self.assertEqual(seen["body"]["generationConfig"]["temperature"], 0.0)
-        self.assertEqual(seen["body"]["generationConfig"]["maxOutputTokens"], 700)
-        self.assertEqual(seen["body"]["systemInstruction"]["parts"][0]["text"], "Return a N0TE decision.")
 
-    def test_malformed_native_gemini_json_fails_closed(self):
-        provider, _ = self.provider({
-            "candidates": [{"content": {"parts": [{"text": '{"decision":"keep" "actions":[]}'}]}}]
+    def test_native_gemini_uses_json_schema_and_google_key_header(self):
+        provider, seen = self.provider({
+            "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": '{"decision":"keep","actions":[]}'}]}}]
         })
-        with self.assertRaisesRegex(RuntimeError, "did not return valid structured JSON"):
+        schema = self.schema()
+        result = gemini.gemini_native_chat(provider, "google-secret", self.chat(), {"name": "reply", "schema": schema, "strict": True}, 12)
+        self.assertEqual(result["provider_bridge"], "gemini-native")
+        request = seen["requests"][0]
+        self.assertIn("models/gemini-3.5-flash:generateContent", request["url"])
+        self.assertEqual(request["headers"].get("x-goog-api-key"), "google-secret")
+        self.assertNotIn("authorization", request["headers"])
+        self.assertEqual(request["body"]["generationConfig"]["responseMimeType"], "application/json")
+        self.assertEqual(request["body"]["generationConfig"]["responseJsonSchema"], schema)
+        self.assertEqual(request["body"]["generationConfig"]["temperature"], 0.0)
+        self.assertEqual(request["body"]["generationConfig"]["thinkingConfig"]["thinkingLevel"], "low")
+        self.assertEqual(request["body"]["generationConfig"]["maxOutputTokens"], 700)
+        self.assertEqual(request["body"]["systemInstruction"]["parts"][0]["text"], "Return a N0TE decision.")
+
+    def test_thought_text_part_is_not_merged_into_structured_answer(self):
+        provider, seen = self.provider({
+            "candidates": [{
+                "finishReason": "STOP",
+                "content": {"parts": [
+                    {"text": "internal summary that is not JSON", "thought": True},
+                    {"text": '{"decision":"keep","actions":[]}', "thoughtSignature": "opaque"},
+                ]},
+            }]
+        })
+        result = gemini.gemini_native_chat(provider, "google-secret", self.chat(), {"name": "reply", "schema": self.schema(), "strict": True}, 12)
+        self.assertEqual(len(seen["requests"]), 1)
+        self.assertEqual(json.loads(result["choices"][0]["message"]["content"])["decision"], "keep")
+
+    def test_invalid_first_candidate_is_discarded_and_fresh_retry_can_succeed(self):
+        provider, seen = self.provider([
+            {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": '{"decision":"keep" "actions":[]}'}]}}]},
+            {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": '{"decision":"keep","actions":[]}'}]}}]},
+        ])
+        result = gemini.gemini_native_chat(provider, "google-secret", self.chat(), {"name": "reply", "schema": self.schema(), "strict": True}, 12)
+        self.assertEqual(result["provider_bridge"], "gemini-native-retry")
+        self.assertEqual(len(seen["requests"]), 2)
+        retry = seen["requests"][1]["body"]
+        self.assertEqual(retry["generationConfig"]["thinkingConfig"]["thinkingLevel"], "minimal")
+        self.assertIn("previous model candidate", retry["systemInstruction"]["parts"][0]["text"].lower())
+
+    def test_max_tokens_candidate_retries_with_larger_output_budget(self):
+        provider, seen = self.provider([
+            {
+                "candidates": [{"finishReason": "MAX_TOKENS", "finishMessage": "output limit", "content": {"parts": [{"text": '{"decision":"keep"'}]}}],
+                "usageMetadata": {"candidatesTokenCount": 700, "totalTokenCount": 1200},
+            },
+            {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": '{"decision":"keep","actions":[]}'}]}}]},
+        ])
+        gemini.gemini_native_chat(provider, "google-secret", self.chat(max_tokens=700), {"name": "reply", "schema": self.schema(), "strict": True}, 12)
+        self.assertEqual(seen["requests"][0]["body"]["generationConfig"]["maxOutputTokens"], 700)
+        self.assertEqual(seen["requests"][1]["body"]["generationConfig"]["maxOutputTokens"], 1400)
+
+    def test_malformed_native_gemini_json_fails_closed_after_fresh_retry(self):
+        provider, _ = self.provider([
+            {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": '{"decision":"keep" "actions":[]}'}]}}]},
+            {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": '{"decision":"keep", actions:[]}'}]}}]},
+        ])
+        with self.assertRaisesRegex(RuntimeError, "after one fresh retry"):
             gemini.gemini_native_chat(
                 provider,
                 "google-secret",
-                {"model": "gemini-3.5-flash", "messages": [{"role": "user", "content": "test"}]},
-                {"name": "reply", "schema": {"type": "object"}, "strict": True},
+                self.chat(),
+                {"name": "reply", "schema": self.schema(), "strict": True},
                 12,
             )
+
+    def test_malformed_failure_reports_finish_diagnostics_without_response_body(self):
+        provider, _ = self.provider([
+            {
+                "candidates": [{"finishReason": "MAX_TOKENS", "finishMessage": "limit", "content": {"parts": [{"text": "{"}]}}],
+                "usageMetadata": {"candidatesTokenCount": 700, "thoughtsTokenCount": 20, "totalTokenCount": 900},
+            },
+            {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "not-json"}]}}]},
+        ])
+        with self.assertRaises(RuntimeError) as ctx:
+            gemini.gemini_native_chat(
+                provider,
+                "google-secret",
+                self.chat(),
+                {"name": "reply", "schema": self.schema(), "strict": True},
+                12,
+            )
+        text = str(ctx.exception)
+        self.assertIn("finish_reason=MAX_TOKENS", text)
+        self.assertIn("candidate_tokens=700", text)
+        self.assertNotIn("google-secret", text)
 
     def test_install_only_intercepts_gemini(self):
         original = Mock(return_value={"choices": [{"message": {"content": "{}"}}]})

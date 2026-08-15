@@ -7,10 +7,10 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **95 PASS** after the native Gemini structured-output hotfix
+- unit/regression/lifecycle tests: **99 PASS** after Gemini structured-response recovery hardening
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
-- Reproducible coverage on the Gemini-native hotfix head: `n0te_gemini_native.py` **~77%**, `n0te_provider.py` **~46%**, `n0te_server.py` **~47%**; real-Live acceptance remains mandatory
+- Reproducible coverage: **PASS**; real-Live acceptance remains mandatory
 
 ## Installer-specific regressions covered
 
@@ -38,7 +38,11 @@
 
 - Gemini provider selection routes N0TE structured inference through Gemini's native `generateContent` endpoint with the existing JSON Schema contract
 - native Gemini structured calls use `x-goog-api-key` and do not forward the OpenAI bearer credential
-- malformed Gemini JSON is rejected fail-closed rather than punctuation-repaired into a potentially different Ableton action
+- Gemini thought-text parts are excluded from the structured answer instead of being concatenated into JSON
+- non-`STOP` candidates such as `MAX_TOKENS` are classified as incomplete and reported with bounded finish/token diagnostics
+- the first malformed/incomplete Gemini candidate is discarded and one fresh schema-constrained retry is allowed; the malformed candidate is never punctuation-repaired
+- Gemini 3 structured calls use low thinking initially and minimal thinking on the fresh retry; retry output budget may grow up to 2x, capped at 8192 tokens
+- two invalid Gemini candidates still fail closed and never become an Ableton proposal
 - Ollama resolves through the local OpenAI-compatible endpoint
 - remote custom endpoints cannot use plaintext HTTP; localhost may
 - existing Responses-style structured requests are translated to Chat Completions for non-Gemini compatible providers while retaining the JSON Schema contract
@@ -99,7 +103,7 @@ The closure sweep proves execute-success is journaled before fallible post-obser
 
 The real-Live acceptance pass additionally caught and corrected a Doctor-only false negative: the pinned Remote Script is installed directly as `Remote Scripts/Ableton_Live_MCP/{__init__.py,bridge.py}`. The Doctor now validates that actual installer/upstream layout rather than requiring an extra nested package directory.
 
-The provider switchboard is transport-only. Gemini now uses native structured output to avoid malformed-JSON behavior observed through the compatibility layer. This does not widen the Ableton action whitelist or bypass proposal validation, approval, mutation serialization, journaling, Set ownership, or N0TE Undo safety. Cloud-provider availability and local-model quality remain real-machine acceptance concerns.
+The provider switchboard is transport-only. Gemini uses native structured output and now handles real-world malformed/incomplete candidates by isolating thought parts, checking finish metadata, discarding the bad candidate, and making at most one fresh schema-constrained retry. It never guess-repairs safety-critical JSON. This does not widen the Ableton action whitelist or bypass proposal validation, approval, mutation serialization, journaling, Set ownership, or N0TE Undo safety. Cloud-provider availability and local-model quality remain real-machine acceptance concerns.
 
 This is **implementation complete / real-Live acceptance pending**, not a SONG-READY claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
 
