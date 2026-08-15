@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass,field
 from enum import Enum
 from typing import Any,Protocol
+from n0te_capabilities import ComponentState
 class AudioKind(str,Enum):DAW_TAP="DAW_TAP";SYSTEM_TAP="SYSTEM_TAP";PROCESS_TAP="PROCESS_TAP";MIC="MIC";AUDIO_DEVICE="AUDIO_DEVICE";STANDALONE_HOST="STANDALONE_HOST";LOCAL_RECORDER="LOCAL_RECORDER";ANALYSIS="ANALYSIS";STREAM="STREAM";REMOTE="REMOTE"
 @dataclass(frozen=True)
 class AudioFormat:sample_rate:int;channels:int;sample_type:str="float32"
@@ -40,14 +41,50 @@ class PluginSession:
   return features
 class IntegrationTier(str,Enum):DETECTED_UNSUPPORTED="DETECTED_UNSUPPORTED";GENERIC="GENERIC";ENHANCED="ENHANCED";DEEP="DEEP"
 @dataclass
+class HostCapabilityDescriptor:
+ capability_id:str;supported:bool;integration_depth:IntegrationTier;runtime_state:ComponentState;implementation_id:str;evidence:str="UNKNOWN";reason:str="";last_verified:float=0;fallback_candidates:list[str]=field(default_factory=list);authority_requirements:set[str]=field(default_factory=set);host_extensions:dict[str,Any]=field(default_factory=dict)
+ def usable(self):return self.supported and self.runtime_state in {ComponentState.READY,ComponentState.BUSY}
+@dataclass
 class HostAdapterDescriptor:
- host:str;tier:IntegrationTier;target_tier:IntegrationTier=IntegrationTier.DEEP;available_capabilities:set[str]=field(default_factory=set);host_extensions:set[str]=field(default_factory=set);healthy:bool=True
- def effective_tier(self):
-  if self.healthy:return self.tier
-  if self.tier is IntegrationTier.DEEP:return IntegrationTier.ENHANCED if self.available_capabilities else IntegrationTier.GENERIC
-  if self.tier is IntegrationTier.ENHANCED:return IntegrationTier.GENERIC
-  return self.tier
- def status(self):return {"host":self.host,"tier":self.effective_tier().value,"configured_tier":self.tier.value,"target_tier":self.target_tier.value,"healthy":self.healthy,"capabilities":sorted(self.available_capabilities),"host_extensions":sorted(self.host_extensions)}
+ host:str;implementation_maturity:IntegrationTier;target_maturity:IntegrationTier=IntegrationTier.DEEP;capabilities:dict[str,HostCapabilityDescriptor]=field(default_factory=dict);host_extensions:set[str]=field(default_factory=set);adapter_state:ComponentState=ComponentState.READY;song_id:str="";workspace_id:str=""
+ @property
+ def overall_health(self):
+  if self.adapter_state is ComponentState.UNAVAILABLE:return ComponentState.UNAVAILABLE
+  useful=[x for x in self.capabilities.values() if x.usable()]
+  if not useful:return ComponentState.UNAVAILABLE if self.capabilities else self.adapter_state
+  return ComponentState.DEGRADED if any(x.runtime_state in {ComponentState.DEGRADED,ComponentState.UNAVAILABLE,ComponentState.RECOVERING} for x in self.capabilities.values()) else self.adapter_state
+ def resolve(self,capability_id):
+  item=self.capabilities.get(capability_id);return item if item and item.usable() else None
+ def mark_state(self,capability_id,state,reason=""):
+  item=self.capabilities[capability_id];item.runtime_state=state;item.reason=reason
+ def status(self):return {"host":self.host,"implementation_maturity":self.implementation_maturity.value,"target_maturity":self.target_maturity.value,"overall_health":self.overall_health.value,"adapter_state":self.adapter_state.value,"song_id":self.song_id,"workspace_id":self.workspace_id,"capabilities":{k:{"depth":v.integration_depth.value,"state":v.runtime_state.value,"supported":v.supported,"reason":v.reason} for k,v in sorted(self.capabilities.items())},"host_extensions":sorted(self.host_extensions)}
+
+_DEPTH_RANK={tier:index for index,tier in enumerate(IntegrationTier)}
+
+def resolve_job_capabilities(adapters:list[HostAdapterDescriptor],required:list[str]):
+ """Resolve each job requirement independently; aggregate adapter health is not a gate."""
+ steps=[]
+ for capability_id in required:
+  candidates=[]
+  failed=[]
+  for adapter in adapters:
+   descriptor=adapter.capabilities.get(capability_id)
+   if descriptor and descriptor.usable() and adapter.adapter_state not in {ComponentState.OFF,ComponentState.UNAVAILABLE}:
+    candidates.append((_DEPTH_RANK[descriptor.integration_depth],descriptor.last_verified,adapter.host,descriptor))
+   elif descriptor:
+    failed.append(descriptor)
+  if candidates:
+   _,_,host,item=max(candidates,key=lambda value:(value[0],value[1],value[2]))
+   steps.append({"capability":capability_id,"method":"AUTOMATIC","implementation":item.implementation_id,"host":host,"depth":item.integration_depth.value})
+  else:
+   fallback=[]
+   for item in failed:
+    fallback.extend(candidate for candidate in item.fallback_candidates if candidate not in fallback)
+   steps.append({"capability":capability_id,"method":"GUIDED_MANUAL","fallback_candidates":fallback,"reason":failed[0].reason if failed else "unsupported"})
+ return steps
+
+def plan_job_capabilities(adapter:HostAdapterDescriptor,required:list[str]):
+ return resolve_job_capabilities([adapter],required)
 class DAWAdapter(Protocol):
  tier:IntegrationTier
  def host_identity(self)->dict:...

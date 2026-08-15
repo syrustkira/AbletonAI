@@ -19,11 +19,34 @@ class PlatformPackagingTests(unittest.TestCase):
   with self.assertRaises(PermissionError):execute_authorized(Adapter(),{},None)
   self.assertTrue(execute_authorized(Adapter(),{}, {"approved":True,"revalidated":True})["ok"])
  def test_every_supported_host_targets_deep_without_fake_current_support(self):
-  fixtures=[HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,available_capabilities={"clips_read"},host_extensions={"SessionClip"}),HostAdapterDescriptor("Logic",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("FL Studio",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("Pro Tools",IntegrationTier.DETECTED_UNSUPPORTED)]
-  self.assertTrue(all(x.target_tier is IntegrationTier.DEEP for x in fixtures));self.assertEqual(fixtures[1].tier,IntegrationTier.DETECTED_UNSUPPORTED);self.assertIn("SessionClip",fixtures[0].status()["host_extensions"])
- def test_deep_failure_degrades_capability_not_song_identity(self):
-  x=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,available_capabilities={"transport_read"},healthy=False)
-  self.assertEqual(x.effective_tier(),IntegrationTier.ENHANCED);self.assertEqual(x.target_tier,IntegrationTier.DEEP)
+  fixtures=[HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,host_extensions={"SessionClip"}),HostAdapterDescriptor("Logic",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("FL Studio",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("Pro Tools",IntegrationTier.DETECTED_UNSUPPORTED)]
+  self.assertTrue(all(x.target_maturity is IntegrationTier.DEEP for x in fixtures));self.assertEqual(fixtures[1].implementation_maturity,IntegrationTier.DETECTED_UNSUPPORTED);self.assertIn("SessionClip",fixtures[0].status()["host_extensions"])
+ def test_deep_capability_failure_does_not_downgrade_siblings_or_maturity(self):
+  caps={x:HostCapabilityDescriptor(x,True,IntegrationTier.DEEP,ComponentState.READY,"ableton") for x in ("transport_read","automation_read","automation_write","midi_read","midi_modify","routing_read","routing_set")}
+  x=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities=caps,song_id="song",workspace_id="ws")
+  x.mark_state("automation_write",ComponentState.DEGRADED,"endpoint fault")
+  self.assertEqual(x.implementation_maturity,IntegrationTier.DEEP);self.assertEqual(x.overall_health,ComponentState.DEGRADED)
+  self.assertIsNotNone(x.resolve("automation_read"));self.assertIsNotNone(x.resolve("midi_read"));self.assertIsNotNone(x.resolve("routing_read"));self.assertIsNone(x.resolve("automation_write"))
+  self.assertEqual((x.song_id,x.workspace_id),("song","ws"))
+  x.mark_state("automation_write",ComponentState.READY);self.assertIsNotNone(x.resolve("automation_write"));self.assertEqual(x.overall_health,ComponentState.READY)
+ def test_job_combines_healthy_automatic_and_failed_guided_manual(self):
+  caps={"track_read":HostCapabilityDescriptor("track_read",True,IntegrationTier.DEEP,ComponentState.READY,"ableton"),"device_read":HostCapabilityDescriptor("device_read",True,IntegrationTier.DEEP,ComponentState.READY,"ableton"),"automation_write":HostCapabilityDescriptor("automation_write",True,IntegrationTier.DEEP,ComponentState.DEGRADED,"ableton",reason="write unavailable",fallback_candidates=["plugin_bridge"])}
+  plan=plan_job_capabilities(HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities=caps),list(caps))
+  self.assertEqual([x["method"] for x in plan],["AUTOMATIC","AUTOMATIC","GUIDED_MANUAL"]);self.assertEqual(plan[2]["fallback_candidates"],["plugin_bridge"])
+ def test_subcapability_failures_and_recovery_are_isolated(self):
+  names=("automation_read","automation_create","midi_read","midi_modify","routing_read_input","routing_set_input")
+  adapter=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities={name:HostCapabilityDescriptor(name,True,IntegrationTier.DEEP,ComponentState.READY,"ableton") for name in names},song_id="song-1")
+  for failed,healthy in (("automation_create","automation_read"),("midi_modify","midi_read"),("routing_set_input","routing_read_input")):
+   adapter.mark_state(failed,ComponentState.UNAVAILABLE,"function circuit open")
+   self.assertIsNone(adapter.resolve(failed));self.assertIsNotNone(adapter.resolve(healthy));self.assertEqual(adapter.implementation_maturity,IntegrationTier.DEEP);self.assertEqual(adapter.song_id,"song-1")
+  adapter.mark_state("midi_modify",ComponentState.RECOVERING);self.assertIsNone(adapter.resolve("midi_modify"));self.assertIsNotNone(adapter.resolve("midi_read"))
+  adapter.mark_state("midi_modify",ComponentState.READY);self.assertIsNotNone(adapter.resolve("midi_modify"));self.assertEqual(adapter.capabilities["automation_create"].runtime_state,ComponentState.UNAVAILABLE)
+ def test_resolution_replaces_only_failed_capability(self):
+  deep={name:HostCapabilityDescriptor(name,True,IntegrationTier.DEEP,ComponentState.READY,"ableton") for name in ("track_read","automation_write")}
+  deep["automation_write"].runtime_state=ComponentState.DEGRADED
+  bridge={"automation_write":HostCapabilityDescriptor("automation_write",True,IntegrationTier.GENERIC,ComponentState.READY,"plugin_bridge")}
+  plan=resolve_job_capabilities([HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,capabilities=deep),HostAdapterDescriptor("Bridge",IntegrationTier.GENERIC,capabilities=bridge)],["track_read","automation_write"])
+  self.assertEqual([(x["capability"],x["implementation"]) for x in plan],[("track_read","ableton"),("automation_write","plugin_bridge")])
  def test_packaging_dependencies_in_use_and_rollback(self):
   core=ComponentManifest(Component.CORE,"1",{"mac"},{"arm64"},rollback_source="old")
   plugin=ComponentManifest(Component.VST3,"1",{"mac"},{"arm64"},{Component.CORE},rollback_source="old")
