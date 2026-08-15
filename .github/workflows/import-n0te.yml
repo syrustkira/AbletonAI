@@ -1,12 +1,12 @@
 name: Import validated N0TE baseline
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - agent/n0te-song-ready-baseline
     paths:
-      - '.n0te-import/**'
-      - 'IMPORT_N0TE_PAYLOAD.py'
+      - '.n0te-import/trigger.txt'
 
 permissions:
   contents: write
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout migration branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: agent/n0te-song-ready-baseline
           fetch-depth: 0
@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m unittest discover -s tests -q
+          python3 -m unittest discover -s tests -v
           python3 -m compileall -q app INSTALL_N0TE_ABLETON_AI.py
           bash -n INSTALL_N0TE_MAC.command
           bash -n START_N0TE_ABLETON_AI.command
@@ -36,12 +36,29 @@ jobs:
           python3 -m json.tool VERSION.json >/dev/null
           python3 -m json.tool FEATURE_MATRIX.json >/dev/null
           python3 -m json.tool N0TE_CONTEXT_PACK.json >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          import tempfile
+
+          html = Path('app/static/index.html').read_text(encoding='utf-8')
+          scripts = re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', html, flags=re.S | re.I)
+          inline = '\n'.join(scripts).strip()
+          if inline:
+              with tempfile.NamedTemporaryFile('w', suffix='.js', encoding='utf-8', delete=False) as fh:
+                  fh.write(inline)
+                  tmp = fh.name
+              subprocess.run(['node', '--check', tmp], check=True)
+          else:
+              print('No inline JavaScript found; skipping JS syntax check.')
+          PY
 
       - name: Remove migration scaffolding
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf .n0te-import IMPORT_N0TE_PAYLOAD.py
+          rm -rf .n0te-import IMPORT_N0TE_PAYLOAD.py .github/workflows/import-n0te.yml
           find . -type d -name __pycache__ -prune -exec rm -rf {} +
           find . -type f -name '*.pyc' -delete
 
@@ -52,9 +69,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          if git diff --cached --quiet; then
-            echo 'No changes to commit.'
-          else
-            git commit -m 'Import validated N0TE v1.2.4 Song-Ready baseline'
-            git push origin HEAD:agent/n0te-song-ready-baseline
-          fi
+          git diff --cached --check
+          git commit -m 'Publish validated N0TE v1.2.4 canonical baseline'
+          git push origin HEAD:agent/n0te-song-ready-baseline
