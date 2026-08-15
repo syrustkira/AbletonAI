@@ -325,6 +325,12 @@
       "ableton": "replaceable adapter or not applicable",
       "n0te_role": "Cross-component authority/privacy/resilience regressions",
       "status": "partially_implemented"
+    },
+    {
+      "feature": "Multi-DAW adapter maturity",
+      "ableton": "first validated DEEP adapter",
+      "n0te_role": "all officially supported DAWs target DEEP; unsupported hosts remain honestly DETECTED_UNSUPPORTED",
+      "status": "partially_implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

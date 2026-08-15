@@ -38,7 +38,16 @@ class PluginSession:
   old=(self.song_id,self.workspace_id);features=self.negotiate(h)
   if old!=("","") and old!=(self.song_id,self.workspace_id):raise PermissionError("Reconnect cannot change Song/workspace binding")
   return features
-class IntegrationTier(str,Enum):GENERIC="GENERIC";ENHANCED="ENHANCED";DEEP="DEEP"
+class IntegrationTier(str,Enum):DETECTED_UNSUPPORTED="DETECTED_UNSUPPORTED";GENERIC="GENERIC";ENHANCED="ENHANCED";DEEP="DEEP"
+@dataclass
+class HostAdapterDescriptor:
+ host:str;tier:IntegrationTier;target_tier:IntegrationTier=IntegrationTier.DEEP;available_capabilities:set[str]=field(default_factory=set);host_extensions:set[str]=field(default_factory=set);healthy:bool=True
+ def effective_tier(self):
+  if self.healthy:return self.tier
+  if self.tier is IntegrationTier.DEEP:return IntegrationTier.ENHANCED if self.available_capabilities else IntegrationTier.GENERIC
+  if self.tier is IntegrationTier.ENHANCED:return IntegrationTier.GENERIC
+  return self.tier
+ def status(self):return {"host":self.host,"tier":self.effective_tier().value,"configured_tier":self.tier.value,"target_tier":self.target_tier.value,"healthy":self.healthy,"capabilities":sorted(self.available_capabilities),"host_extensions":sorted(self.host_extensions)}
 class DAWAdapter(Protocol):
  tier:IntegrationTier
  def host_identity(self)->dict:...

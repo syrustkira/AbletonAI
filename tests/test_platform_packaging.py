@@ -18,6 +18,12 @@ class PlatformPackagingTests(unittest.TestCase):
  def test_daw_mutation_contract_requires_gate1(self):
   with self.assertRaises(PermissionError):execute_authorized(Adapter(),{},None)
   self.assertTrue(execute_authorized(Adapter(),{}, {"approved":True,"revalidated":True})["ok"])
+ def test_every_supported_host_targets_deep_without_fake_current_support(self):
+  fixtures=[HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,available_capabilities={"clips_read"},host_extensions={"SessionClip"}),HostAdapterDescriptor("Logic",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("FL Studio",IntegrationTier.DETECTED_UNSUPPORTED),HostAdapterDescriptor("Pro Tools",IntegrationTier.DETECTED_UNSUPPORTED)]
+  self.assertTrue(all(x.target_tier is IntegrationTier.DEEP for x in fixtures));self.assertEqual(fixtures[1].tier,IntegrationTier.DETECTED_UNSUPPORTED);self.assertIn("SessionClip",fixtures[0].status()["host_extensions"])
+ def test_deep_failure_degrades_capability_not_song_identity(self):
+  x=HostAdapterDescriptor("Ableton",IntegrationTier.DEEP,available_capabilities={"transport_read"},healthy=False)
+  self.assertEqual(x.effective_tier(),IntegrationTier.ENHANCED);self.assertEqual(x.target_tier,IntegrationTier.DEEP)
  def test_packaging_dependencies_in_use_and_rollback(self):
   core=ComponentManifest(Component.CORE,"1",{"mac"},{"arm64"},rollback_source="old")
   plugin=ComponentManifest(Component.VST3,"1",{"mac"},{"arm64"},{Component.CORE},rollback_source="old")
