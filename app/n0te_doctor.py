@@ -35,9 +35,12 @@ def remote_script_doctor(state: Path, home: Path | None = None) -> dict[str, Any
     # a default candidate must not silently make it look healthy.
     user_library = configured_path or fallback_existing or fallbacks[0]
     remote = user_library / "Remote Scripts" / "Ableton_Live_MCP"
-    required = [remote / "__init__.py", remote / "Ableton_Live_MCP" / "__init__.py", remote / "Ableton_Live_MCP" / "bridge.py"]
+    # The pinned upstream package is copied directly into Remote Scripts/Ableton_Live_MCP.
+    # Its required files live at the Remote Script root; an additional
+    # Ableton_Live_MCP subfolder is the accidental extra-nesting case.
+    required = [remote / "__init__.py", remote / "bridge.py"]
     missing = [str(p) for p in required if not p.is_file()]
-    nested_extra = (remote / "Ableton_Live_MCP" / "Ableton_Live_MCP").is_dir()
+    nested_extra = (remote / "Ableton_Live_MCP").is_dir()
     log_candidates = list((home / "Library/Preferences/Ableton").glob("Live */Log.txt"))
     latest_log = max(log_candidates, key=lambda p: p.stat().st_mtime) if log_candidates else None
     relevant: list[str] = []
@@ -80,5 +83,5 @@ def remote_script_doctor(state: Path, home: Path | None = None) -> dict[str, Any
         "installed_but_not_loaded": files_installed and not (loaded_evidence or bridge_live),
         "likely_user_library_mismatch": likely_mismatch,
         "inference_note": "User-Library mismatch and log loading status are diagnostics, not proof, unless the bridge responds.",
-        "repair": "Select the manifest User Library in Live, ensure exactly one Remote Scripts/Ableton_Live_MCP folder with the required nested package, then restart Live and select Ableton_Live_MCP as a Control Surface.",
+        "repair": "Select the manifest User Library in Live, ensure exactly one Remote Scripts/Ableton_Live_MCP folder containing __init__.py and bridge.py, then restart Live and select Ableton_Live_MCP as a Control Surface.",
     }
