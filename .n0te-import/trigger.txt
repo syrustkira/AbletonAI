@@ -1,1 +1,1 @@
-Trigger the one-shot validated N0TE baseline import.
+Trigger canonical N0TE v1.2.4 import using SHA-256 file-manifest verification.
