@@ -57,7 +57,7 @@ This gate is the blocker before using N0TE mutations on a real new song.
 - [x] Consistent local Host/Origin policy.
 - [x] Proposal expiration/garbage collection.
 - [x] Redacted rotating diagnostic log.
-- [ ] Characterization tests before splitting overloaded server responsibilities.
+- [x] Characterization tests before splitting overloaded server responsibilities.
 
 ### Song-Ready acceptance
 
