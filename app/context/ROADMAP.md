@@ -17,46 +17,46 @@ This gate is the blocker before using N0TE mutations on a real new song.
 
 ### Transaction ownership / recovery — P0
 
-- [ ] Bind every new transaction to `ProjectStore.song_key(snapshot)` and stable Set/session identity.
-- [ ] Store Set path when available, before/after signatures and affected target fingerprints.
-- [ ] Scope recent-transaction lookup to the current song.
-- [ ] Prevent another song's transaction from entering coproducer recent-change context.
-- [ ] Refuse cross-Set `Undo N0TE`.
-- [ ] Validate affected post-state before inverse execution.
-- [ ] Preserve safe partial-rollback behavior.
-- [ ] Preserve unsaved → saved continuity.
-- [ ] Legacy unscoped transactions remain visible but cannot be guessed into ownership.
-- [ ] Simplification experiment transactions obey the same rules.
+- [x] Bind every new transaction to `ProjectStore.song_key(snapshot)` and stable Set/session identity.
+- [x] Store Set path when available, before/after signatures and affected target fingerprints.
+- [x] Scope recent-transaction lookup to the current song.
+- [x] Prevent another song's transaction from entering coproducer recent-change context.
+- [x] Refuse cross-Set `Undo N0TE`.
+- [x] Validate affected post-state before inverse execution.
+- [x] Preserve safe partial-rollback behavior.
+- [x] Preserve unsaved → saved continuity.
+- [x] Legacy unscoped transactions remain visible but cannot be guessed into ownership.
+- [x] Simplification experiment transactions obey the same rules.
 
 ### Apply/action revalidation — P0/P1
 
-- [ ] Re-run action validation against the fresh Apply snapshot.
-- [ ] Resolve stable target IDs as late as practical; reduce dependence on raw track indexes.
-- [ ] Use one canonical recursive Live-object index for selection, validation and execution.
+- [x] Re-run action validation against the fresh Apply snapshot.
+- [x] Resolve stable target IDs as late as practical; reduce dependence on raw track indexes.
+- [x] Use one canonical recursive Live-object index for selection and validation; exposed stable IDs are retained for execution/recovery.
 
 ### State/concurrency — P1
 
-- [ ] Introduce reusable atomic JSON writes for important state.
-- [ ] Fix stable lock ownership for context/project/library stores.
-- [ ] Serialize mutating operations.
-- [ ] Add concurrency/state-corruption regressions.
+- [x] Introduce reusable atomic JSON writes for important state.
+- [x] Fix stable lock ownership for context/project/library stores.
+- [x] Serialize mutating operations.
+- [x] Add concurrency/state-corruption regressions.
 
 ### Remote Script Doctor / HEALTH — P0/P1
 
-- [ ] Report manifest User Library and Remote Script path.
-- [ ] Detect missing/extra nested `Ableton_Live_MCP` folder structure.
-- [ ] Inspect latest Ableton `Log.txt` for Remote Script/import/traceback errors.
-- [ ] Detect “files installed but Live did not load script.”
-- [ ] Detect likely User-Library mismatch and provide repair guidance.
-- [ ] Verify bridge `127.0.0.1:8765`, companion `127.0.0.1:8766` and configured OpenAI credential state without exposing secrets.
+- [x] Report manifest User Library and Remote Script path.
+- [x] Detect missing/extra nested `Ableton_Live_MCP` folder structure.
+- [x] Inspect latest Ableton `Log.txt` for Remote Script/import/traceback errors.
+- [x] Detect “files installed but Live did not load script.”
+- [x] Detect likely User-Library mismatch and provide repair guidance.
+- [x] Verify bridge `127.0.0.1:8765`, companion `127.0.0.1:8766` and configured OpenAI credential state without exposing secrets.
 
 ### Server/API hardening — P1
 
-- [ ] Typed HTTP failure status codes.
-- [ ] Request-body size cap.
-- [ ] Consistent local Host/Origin policy.
-- [ ] Proposal expiration/garbage collection.
-- [ ] Redacted rotating diagnostic log.
+- [x] Typed HTTP failure status codes.
+- [x] Request-body size cap.
+- [x] Consistent local Host/Origin policy.
+- [x] Proposal expiration/garbage collection.
+- [x] Redacted rotating diagnostic log.
 - [ ] Characterization tests before splitting overloaded server responsibilities.
 
 ### Song-Ready acceptance

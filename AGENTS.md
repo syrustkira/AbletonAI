@@ -31,6 +31,7 @@ This repository is the canonical source of truth for N0TE Ableton AI. Before arc
 - `PROJECT_BLUEPRINT.md` establishes intended architecture/invariants.
 - `FEATURE_MATRIX.json` establishes current feature status.
 - `docs/ROADMAP.md` establishes build order.
+- Files under `app/context/` that mirror canonical root/governance files are packaging mirrors, not independent authorities. Update the canonical source and its packaged mirror together; `tests/test_context_mirrors.py` must remain green.
 - If implementation and documentation disagree, report the drift. Do not silently rewrite architecture to match an accidental implementation and do not claim documentation proves behavior.
 
 ## Truth and state precedence

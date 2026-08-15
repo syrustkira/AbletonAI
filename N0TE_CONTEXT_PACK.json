@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "generated_for": "N0TE Ableton AI v1.2.4 canonical Song-Ready handoff",
+  "generated_for": "N0TE Ableton AI v1.2.4 canonical current runtime context",
   "identity": {
     "artist_name": "TellMeN0TE",
     "spelling_rule": "TellMeN0TE exactly, with zero in N0TE.",
@@ -153,6 +153,7 @@
     },
     "license_context": "Original syrustkira/AbletonAI repository is GPL-3.0. This is currently a personal project; preserve third-party notices and revisit distribution obligations before commercial release.",
     "native_first_rule": "N0TE should know what the user's installed Live can do and use Live's native mechanism before creating a duplicate implementation.",
+    "ai_provider_status": "OpenAI, Gemini, Ollama Local, and a custom OpenAI-compatible provider are explicitly selectable. Provider switching is transport-only and never bypasses N0TE action validation or enables automatic paid-provider fallback.",
     "provider_order": [
       "current set",
       "Ableton Browser",
@@ -191,6 +192,9 @@
   "implemented_or_in_progress": [
     "Current-set snapshot and selection awareness",
     "Proposal gating, target validation, set-signature guard, inverse journal, N0TE Undo, and a separate explicit native Ableton Undo command",
+    "Gate 1 transaction ownership, cross-Set refusal, fresh Apply revalidation, targeted recovery validation, serialized mutation, atomic state writes, proposal expiry, and hardened local HTTP failure handling",
+    "Remote Script/User Library Doctor with real installed-layout validation and actionable diagnostics",
+    "Explicit AI provider switchboard for OpenAI, Gemini, Ollama Local, and custom OpenAI-compatible endpoints with no automatic paid fallback",
     "Per-song stage/goal/references/do-not-lose/do-not-work-on context",
     "Live Browser library index and optional capability enrichment",
     "Capability resolver using current set -> native -> owned -> extension -> external order",
@@ -209,7 +213,8 @@
     "Finish view refuses to claim bounce readiness before audio preflight exists"
   ],
   "next_layers": [
-    "SONG-READY trust/safety gate: transaction Set ownership, targeted Undo validation, fresh Apply revalidation, state concurrency/atomicity, Remote Script Doctor, server diagnostics",
+    "Complete the Gate 1 disposable real-Live acceptance checklist and record the evidence; implementation hardening is complete but SONG-READY remains unproven until this succeeds.",
+    "Add characterization tests before decomposing overloaded server responsibilities.",
     "Context Engine: provenance, versioned ContextEnvelope, context diff, session distillation, sync packet and selective retrieval",
     "Read-only MCP adapter and secure ChatGPT context synchronization after Context Engine",
     "AgentAudioTap capture hardening, deterministic audio metrics, Before/After, Plugin Delta, Reference Delta and Finish Dry Run",
@@ -244,15 +249,12 @@
       "Do not claim CPU savings from plugin replacement without measurement evidence."
     ]
   },
-  "context_version": "1.2.4-song-ready-plan-1",
+  "context_version": "1.2.4-gate1-implementation-complete-2",
   "song_ready_gate": {
     "purpose": "Make the current coproducer safe/reliable enough to start a real new song before later feature expansion.",
+    "state": "implementation_complete_real_live_acceptance_pending",
     "blockers": [
-      "song/Set-scoped transaction ownership and Undo safety",
-      "fresh Apply target revalidation",
-      "Remote Script/User Library doctor",
-      "atomic/thread-safe important state",
-      "server failure-path hardening and acceptance tests"
+      "user completion of the Gate 1 disposable real-Live acceptance checklist"
     ],
     "does_not_block": [
       "Audio Evidence",
