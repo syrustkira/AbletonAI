@@ -35,9 +35,32 @@ def remote_script_doctor(state: Path, home: Path | None = None) -> dict[str, Any
     # a default candidate must not silently make it look healthy.
     user_library = configured_path or fallback_existing or fallbacks[0]
     remote = user_library / "Remote Scripts" / "Ableton_Live_MCP"
-    required = [remote / "__init__.py", remote / "Ableton_Live_MCP" / "__init__.py", remote / "Ableton_Live_MCP" / "bridge.py"]
+
+    # Canonical pinned/install layout:
+    #   Remote Scripts/Ableton_Live_MCP/__init__.py
+    #   Remote Scripts/Ableton_Live_MCP/bridge.py
+    #
+    # Older diagnostics/tests modeled a nested-only package. Recognize that
+    # shape explicitly for backward-compatible "installed but not loaded"
+    # reporting, but never let an extra child folder hide duplicate nesting
+    # when the canonical root layout is present.
+    nested = remote / "Ableton_Live_MCP"
+    root_required = [remote / "__init__.py", remote / "bridge.py"]
+    legacy_required = [remote / "__init__.py", nested / "__init__.py", nested / "bridge.py"]
+    root_complete = all(path.is_file() for path in root_required)
+    legacy_nested = (not (remote / "bridge.py").is_file()) and all(path.is_file() for path in legacy_required)
+    if root_complete:
+        required = root_required
+        layout = "root"
+    elif legacy_nested:
+        required = legacy_required
+        layout = "legacy_nested"
+    else:
+        required = root_required
+        layout = "incomplete"
     missing = [str(p) for p in required if not p.is_file()]
-    nested_extra = (remote / "Ableton_Live_MCP" / "Ableton_Live_MCP").is_dir()
+    nested_extra = root_complete and nested.is_dir()
+
     log_candidates = list((home / "Library/Preferences/Ableton").glob("Live */Log.txt"))
     latest_log = max(log_candidates, key=lambda p: p.stat().st_mtime) if log_candidates else None
     relevant: list[str] = []
@@ -70,6 +93,7 @@ def remote_script_doctor(state: Path, home: Path | None = None) -> dict[str, Any
         "fallback_candidates": [str(path) for path in fallbacks], "fallback_existing": str(fallback_existing or ""),
         "verified_user_library": str(user_library) if user_library.exists() else "",
         "user_library": str(user_library), "expected_remote_script": str(remote),
+        "remote_script_layout": layout, "legacy_nested_layout": legacy_nested,
         "required_files": [str(p) for p in required], "missing_required_files": missing,
         "extra_nested_folder": nested_extra, "files_installed": files_installed,
         "bridge": {"endpoint": "127.0.0.1:8765", "responding": bridge_live},
@@ -80,5 +104,5 @@ def remote_script_doctor(state: Path, home: Path | None = None) -> dict[str, Any
         "installed_but_not_loaded": files_installed and not (loaded_evidence or bridge_live),
         "likely_user_library_mismatch": likely_mismatch,
         "inference_note": "User-Library mismatch and log loading status are diagnostics, not proof, unless the bridge responds.",
-        "repair": "Select the manifest User Library in Live, ensure exactly one Remote Scripts/Ableton_Live_MCP folder with the required nested package, then restart Live and select Ableton_Live_MCP as a Control Surface.",
+        "repair": "Select the manifest User Library in Live, ensure exactly one Remote Scripts/Ableton_Live_MCP folder containing __init__.py and bridge.py, then restart Live and select Ableton_Live_MCP as a Control Surface.",
     }

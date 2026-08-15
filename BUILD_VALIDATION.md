@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **84 PASS** in the final Gate 1 closure sweep
+- unit/regression/lifecycle tests: **86 PASS** after the Gate 1 Remote Script Doctor layout hotfix
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Python test coverage in final audit: **~52% overall**, with `n0te_server.py` at **~46%**; real-Live acceptance remains mandatory
@@ -32,6 +32,7 @@
 - custom User Library is used by the installed health check, not only by install/update
 - previous rollback-only version snapshots are cleaned after a newer update completes successfully
 - offline companion status remains usable instead of collapsing to a generic server error
+- Remote Script Doctor accepts the pinned upstream root layout (`Ableton_Live_MCP/__init__.py` + `bridge.py`) and rejects an accidental duplicate nested `Ableton_Live_MCP` folder
 
 ## Hardening carried from 1.2.1+
 
@@ -83,6 +84,8 @@ This proves the installed bridge/UI can communicate with the user's real Live en
 Gate 1 now binds new transactions and simplification experiments to the stable ProjectStore song key, scopes recent context and Undo, rejects legacy/cross-Set ownership guesses, revalidates Apply and recovery targets, and serializes mutations. Review regressions additionally prove Set-anchor-only Save As migration, same-process unrelated-Set isolation, stable-ID Undo after track index shifts, deterministic same-second transaction chronology, and fail-closed ambiguous simplification recovery without native Undo. Atomic state writes, proposal expiry, malformed/oversized request handling, 404/409/503 failure classes, consistent local Host/Origin rejection, and Remote Script diagnostics are automated-test covered.
 
 The closure sweep proves execute-success is journaled before fallible post-observation, same-path/different-Set targetless Undo refusal, actual coerced post-state recovery, serialization of explicit native Undo, locked proposal registries and song-state read/modify/write, parent-directory fsync, and offline-safe/credential-complete/latest-outcome Doctor behavior. Set ownership requires the scoped N0TE song key plus a matching recorded/current Live Set-session identity; saved path, process token, signature, or raw index alone is insufficient.
+
+The real-Live acceptance pass additionally caught and corrected a Doctor-only false negative: the pinned Remote Script is installed directly as `Remote Scripts/Ableton_Live_MCP/{__init__.py,bridge.py}`. The Doctor now validates that actual installer/upstream layout rather than requiring an extra nested package directory.
 
 This is **implementation complete / real-Live acceptance pending**, not a SONG-READY claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
 
