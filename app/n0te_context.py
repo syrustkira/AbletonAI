@@ -3,11 +3,29 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sys
 import time
 import threading
 from pathlib import Path
 from typing import Any
 from n0te_state import atomic_write_json
+
+
+def _install_provider_router_for_server() -> None:
+    """Install the provider switchboard only for the real N0TE server process.
+
+    Importing n0te_context from tests or helper scripts stays side-effect free.
+    """
+    if Path(sys.argv[0]).name != "n0te_server.py":
+        return
+    try:
+        from n0te_provider import install_provider_router
+        install_provider_router(start_switchboard=True)
+    except Exception as exc:
+        print(f"N0TE AI provider router did not start: {exc}", file=sys.stderr)
+
+
+_install_provider_router_for_server()
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
