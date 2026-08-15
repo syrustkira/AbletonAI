@@ -2,12 +2,52 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
+import sys
 import time
 import threading
 from pathlib import Path
 from typing import Any
 from n0te_state import atomic_write_json
+
+
+def _install_provider_router_for_server() -> None:
+    """Install the provider switchboard only for the real N0TE server process.
+
+    Importing n0te_context from tests or helper scripts stays side-effect free.
+    """
+    if Path(sys.argv[0]).name != "n0te_server.py":
+        return
+    try:
+        import n0te_provider as provider
+
+        placeholder = "n0te-provider-router"
+
+        def sync_legacy_guard(active_provider: str) -> None:
+            current = str(os.environ.get("OPENAI_API_KEY") or "")
+            if active_provider == "openai":
+                if current == placeholder:
+                    os.environ.pop("OPENAI_API_KEY", None)
+                return
+            if not current:
+                os.environ["OPENAI_API_KEY"] = placeholder
+
+        original_update = provider._update_provider_settings
+
+        def update_with_guard(payload: dict[str, Any]) -> dict[str, Any]:
+            status = original_update(payload)
+            sync_legacy_guard(str(status.get("provider") or "openai"))
+            return status
+
+        provider._update_provider_settings = update_with_guard
+        sync_legacy_guard(str(provider.provider_config().get("provider") or "openai"))
+        provider.install_provider_router(start_switchboard=True)
+    except Exception as exc:
+        print(f"N0TE AI provider router did not start: {exc}", file=sys.stderr)
+
+
+_install_provider_router_for_server()
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
