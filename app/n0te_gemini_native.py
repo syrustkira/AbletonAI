@@ -124,9 +124,6 @@ def _response_text(raw: dict[str, Any]) -> str:
     if not answer_parts:
         raise GeminiStructuredOutputError("Gemini returned no non-thought text content.", diagnostics)
 
-    # A complete JSON answer is commonly returned in one part. Prefer any part
-    # that is independently valid rather than merging thought/signature-bearing
-    # response parts into the structured answer.
     for text in answer_parts:
         value = text.strip()
         if not value:
@@ -137,8 +134,6 @@ def _response_text(raw: dict[str, Any]) -> str:
         except json.JSONDecodeError:
             pass
 
-    # Some non-streaming responses can split one logical answer across multiple
-    # ordinary text parts. Reconstruct them exactly without inserting new bytes.
     value = "".join(answer_parts).strip()
     if not value:
         raise GeminiStructuredOutputError("Gemini returned empty structured text.", diagnostics)
@@ -185,18 +180,18 @@ def _diagnostic_text(error: GeminiStructuredOutputError) -> str:
 def gemini_native_chat(provider_module: Any, key: str, chat_payload: dict[str, Any], schema_info: dict[str, Any] | None, timeout: float = 90) -> dict[str, Any]:
     model = _model_name(str(chat_payload.get("model") or ""))
     first_raw = _send_native(provider_module, key, model, _native_payload(chat_payload, schema_info, model=model), timeout)
+    first_failure: GeminiStructuredOutputError | None = None
     try:
         text = _response_text(first_raw)
         return {"choices": [{"message": {"content": text}}], "provider_bridge": "gemini-native"}
-    except GeminiStructuredOutputError as first_error:
+    except GeminiStructuredOutputError as exc:
+        first_failure = exc
         if not schema_info:
             raise provider_module.ProviderUnavailableError(
                 "Google Gemini returned unusable text output. "
-                f"Switch provider at {provider_module.SWITCHBOARD_URL}. Detail: {_diagnostic_text(first_error)}"
-            ) from first_error
+                f"Switch provider at {provider_module.SWITCHBOARD_URL}. Detail: {_diagnostic_text(exc)}"
+            ) from exc
 
-    # Never punctuation-repair a safety-critical candidate. Discard it and make
-    # one fresh schema-constrained request from the original prompt instead.
     second_raw = _send_native(
         provider_module,
         key,
@@ -207,11 +202,12 @@ def gemini_native_chat(provider_module: Any, key: str, chat_payload: dict[str, A
     try:
         text = _response_text(second_raw)
     except GeminiStructuredOutputError as second_error:
+        first_detail = _diagnostic_text(first_failure) if first_failure is not None else "unknown first structured-output failure"
         raise provider_module.ProviderUnavailableError(
             "Google Gemini did not return valid structured JSON after one fresh retry. "
             "N0TE discarded both candidates and refused to guess-repair a safety-critical response. "
             f"Retry later or switch provider at {provider_module.SWITCHBOARD_URL}. "
-            f"First: {_diagnostic_text(first_error)} | Second: {_diagnostic_text(second_error)}"
+            f"First: {first_detail} | Second: {_diagnostic_text(second_error)}"
         ) from second_error
     return {"choices": [{"message": {"content": text}}], "provider_bridge": "gemini-native-retry"}
 
