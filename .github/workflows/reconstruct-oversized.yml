@@ -1,0 +1,43 @@
+name: Reconstruct N0TE oversized files
+
+on:
+  push:
+    branches:
+      - agent/n0te-direct-repair
+    paths:
+      - '.n0te-repair/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/n0te-direct-repair
+          fetch-depth: 0
+
+      - name: Decode independent chunks and verify exact Git blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/static tests
+          : > app/static/index.html
+          for f in .n0te-repair/html-*.b64; do base64 -d "$f" >> app/static/index.html; done
+          : > tests/test_core.py
+          for f in .n0te-repair/testcore-*.b64; do base64 -d "$f" >> tests/test_core.py; done
+          test "$(git hash-object app/static/index.html)" = "d5bdfb5ab142517b7f4f63fc0af98922d9a074c3"
+          test "$(git hash-object tests/test_core.py)" = "6dbcadc9d95944ecba358a53e8446c92cc00c9b7"
+
+      - name: Commit verified files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/static/index.html tests/test_core.py
+          git commit -m 'Reconstruct verified N0TE oversized files'
+          git push origin HEAD:agent/n0te-direct-repair
