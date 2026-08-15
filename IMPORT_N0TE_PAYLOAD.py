@@ -196,11 +196,14 @@ def decode_candidate(names: list[str]) -> bytes:
     missing = [name for name in names if not (IMPORT_DIR / name).is_file()]
     if missing:
         raise RuntimeError("missing chunks: " + ", ".join(missing))
-    encoded = "".join(
-        "".join((IMPORT_DIR / name).read_text(encoding="ascii").split())
-        for name in names
-    )
-    return base64.b64decode(encoded, validate=True)
+    # Historical migration chunks were encoded independently. Decode every
+    # chunk before concatenating binary bytes; concatenating padded Base64
+    # text is invalid and was the root cause of the failed importer.
+    parts = []
+    for name in names:
+        encoded = "".join((IMPORT_DIR / name).read_text(encoding="ascii").split())
+        parts.append(base64.b64decode(encoded, validate=True))
+    return b"".join(parts)
 
 
 def install_source(source: Path) -> None:
