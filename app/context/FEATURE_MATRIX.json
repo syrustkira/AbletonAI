@@ -193,6 +193,54 @@
       "ableton": "not applicable or orchestrated native behavior",
       "n0te_role": "Persistent mutation/remote authority revocation without automatic Undo",
       "status": "partially_implemented"
+    },
+    {
+      "feature": "Song and workspace identity model",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Durable non-destructive Song-above-workspace records with idempotent legacy mapping",
+      "status": "implemented"
+    },
+    {
+      "feature": "Universal Project Graph",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Validated host-neutral graph with retained host extensions",
+      "status": "implemented"
+    },
+    {
+      "feature": "Portability survival manifests",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Non-destructive export-candidate reports with preservation metrics",
+      "status": "implemented"
+    },
+    {
+      "feature": "Recovery circuit breaker",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Persistent bounded faults, reversible quarantine, crash capsule and safe-start plan",
+      "status": "implemented"
+    },
+    {
+      "feature": "Realtime Guardian policy",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Deterministic priority/profile scheduling policy; real audio acceptance pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Song Version Engine",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Immutable ancestry and explicit locked-version reopen intent",
+      "status": "implemented"
+    },
+    {
+      "feature": "Provider-neutral Sync Outbox",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Local revision-aware queue with no reconnect upload and Vault exclusion",
+      "status": "implemented"
+    },
+    {
+      "feature": "Knowledge lifecycle",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Durable classified knowledge with protected deterministic pruning",
+      "status": "implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",
