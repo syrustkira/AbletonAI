@@ -7,10 +7,10 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **92 PASS** after the plug-and-play AI provider switchboard addition
+- unit/regression/lifecycle tests: **95 PASS** after the native Gemini structured-output hotfix
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
-- Reproducible coverage on the provider-switchboard head: `n0te_provider.py` **~46%**, `n0te_server.py` **~47%**; real-Live acceptance remains mandatory
+- Reproducible coverage on the Gemini-native hotfix head: `n0te_gemini_native.py` **~77%**, `n0te_provider.py` **~46%**, `n0te_server.py` **~47%**; real-Live acceptance remains mandatory
 
 ## Installer-specific regressions covered
 
@@ -36,12 +36,13 @@
 
 ## AI provider switchboard regressions covered
 
-- Gemini resolves through Google's OpenAI-compatible endpoint
+- Gemini provider selection routes N0TE structured inference through Gemini's native `generateContent` endpoint with the existing JSON Schema contract
+- native Gemini structured calls use `x-goog-api-key` and do not forward the OpenAI bearer credential
+- malformed Gemini JSON is rejected fail-closed rather than punctuation-repaired into a potentially different Ableton action
 - Ollama resolves through the local OpenAI-compatible endpoint
 - remote custom endpoints cannot use plaintext HTTP; localhost may
-- existing Responses-style structured requests are translated to Chat Completions while retaining the JSON Schema contract
+- existing Responses-style structured requests are translated to Chat Completions for non-Gemini compatible providers while retaining the JSON Schema contract
 - Chat Completions structured output is converted back into N0TE's existing response shape
-- Gemini routing uses the Gemini credential and does not forward the OpenAI bearer credential
 - provider selection is explicit; no automatic paid-provider fallback is enabled
 
 ## Hardening carried from 1.2.1+
@@ -98,7 +99,7 @@ The closure sweep proves execute-success is journaled before fallible post-obser
 
 The real-Live acceptance pass additionally caught and corrected a Doctor-only false negative: the pinned Remote Script is installed directly as `Remote Scripts/Ableton_Live_MCP/{__init__.py,bridge.py}`. The Doctor now validates that actual installer/upstream layout rather than requiring an extra nested package directory.
 
-The provider switchboard is transport-only. It does not widen the Ableton action whitelist or bypass proposal validation, approval, mutation serialization, journaling, Set ownership, or N0TE Undo safety. Cloud-provider availability and local-model quality remain real-machine acceptance concerns.
+The provider switchboard is transport-only. Gemini now uses native structured output to avoid malformed-JSON behavior observed through the compatibility layer. This does not widen the Ableton action whitelist or bypass proposal validation, approval, mutation serialization, journaling, Set ownership, or N0TE Undo safety. Cloud-provider availability and local-model quality remain real-machine acceptance concerns.
 
 This is **implementation complete / real-Live acceptance pending**, not a SONG-READY claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
 
