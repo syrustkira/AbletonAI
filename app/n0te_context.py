@@ -21,7 +21,9 @@ def _install_provider_router_for_server() -> None:
         return
     try:
         import n0te_provider as provider
+        from n0te_gemini_native import install as install_gemini_native
 
+        install_gemini_native(provider)
         placeholder = "n0te-provider-router"
 
         def sync_legacy_guard(active_provider: str) -> None:
