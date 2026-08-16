@@ -211,7 +211,8 @@
     "Discovery intent normalization before Browser/web search",
     "Rollback failure stops without blind native Undo",
     "Finish view refuses to claim bounce readiness before audio preflight exists",
-    "Deterministic offline audio measurement, cautious diagnosis, preview-only gain correction, plugin metadata isolation, and cross-platform state paths are fixture-validated; these do not prove realtime, listening, DAW, or commercial-plugin acceptance"
+    "Deterministic offline audio measurement, cautious diagnosis, preview-only gain correction, plugin metadata isolation, and cross-platform state paths are fixture-validated; these do not prove realtime, listening, DAW, or commercial-plugin acceptance",
+    "Offline multiformat audio analysis, gated K-weighted loudness, true peak, FFT/STFT, reference/stem comparison, N0TE DSP previews, explicit external rendering, Linux product discovery, and native C DSP/ring tests are implemented without promoting real DAW or listening acceptance"
   ],
   "next_layers": [
     "Complete the Gate 1 disposable real-Live acceptance checklist and record the evidence; implementation hardening is complete but SONG-READY remains unproven until this succeeds.",

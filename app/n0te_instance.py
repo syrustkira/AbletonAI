@@ -5,8 +5,15 @@ try:import fcntl
 except ImportError:fcntl=None
 class AlreadyRunningError(RuntimeError):pass
 class SingleInstance:
- def __init__(self,path:Path,port=8766):self.path=Path(path);self.port=port;self.handle=None
+ def __init__(self,path:Path,port=8766):self.path=Path(path);self.port=port;self.handle=None;self.mutex=None
  def acquire(self):
+  if os.name=="nt":
+   import ctypes
+   self.mutex=ctypes.windll.kernel32.CreateMutexW(None,False,"Local\\N0TE-Core-SingleInstance")
+   if not self.mutex:raise RuntimeError("Windows single-instance mutex unavailable")
+   if ctypes.windll.kernel32.GetLastError()==183:
+    ctypes.windll.kernel32.CloseHandle(self.mutex);self.mutex=None;raise AlreadyRunningError("N0TE is already running")
+   return self
   self.path.parent.mkdir(parents=True,exist_ok=True);self.handle=self.path.open("a+")
   if fcntl is None:raise RuntimeError("Single-instance locking unavailable")
   try:fcntl.flock(self.handle.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -18,6 +25,9 @@ class SingleInstance:
    with socket.create_connection(("127.0.0.1",self.port),.3):return True
   except OSError:return False
  def release(self):
+  if self.mutex:
+   import ctypes
+   ctypes.windll.kernel32.ReleaseMutex(self.mutex);ctypes.windll.kernel32.CloseHandle(self.mutex);self.mutex=None
   if self.handle:
    fcntl.flock(self.handle.fileno(),fcntl.LOCK_UN);self.handle.close();self.handle=None
  def __enter__(self):return self.acquire()

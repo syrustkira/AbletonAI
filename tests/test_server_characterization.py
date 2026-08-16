@@ -1,8 +1,10 @@
 import http.client
+import base64
 import json
 import threading
 import unittest
 import urllib.error
+import struct
 from pathlib import Path
 from unittest.mock import Mock, patch
 import sys
@@ -164,6 +166,21 @@ class ServerRouteCharacterizationTests(unittest.TestCase):
         with patch.object(server, "load_config", return_value={"network_mode":"offline","update_channel":"STABLE","automatic_update_checking":True,"automatic_safe_install":True}):
             status, _, body = self._request("GET", "/api/updates")
         payload=json.loads(body)["updates"];self.assertEqual(status,200);self.assertEqual(payload["state"],"PAUSED_BY_NETWORK_POLICY");self.assertTrue(payload["intentional_offline"])
+
+    def test_offline_audio_and_plugin_product_routes_are_truthful(self):
+        samples=struct.pack("<hhhh",0,1000,-1000,0);fmt=struct.pack("<HHIIHH",1,1,8000,16000,2,16)
+        riff=b"WAVE"+b"fmt "+struct.pack("<I",len(fmt))+fmt+b"data"+struct.pack("<I",len(samples))+samples
+        wav=b"RIFF"+struct.pack("<I",len(riff))+riff
+        body=json.dumps({"wav_base64":base64.b64encode(wav).decode()}).encode()
+        status,_,response=self._request("POST","/api/audio/analyze",body)
+        payload=json.loads(response);self.assertEqual(status,200);self.assertEqual(payload["mode"],"OFFLINE_ANALYSIS");self.assertIn("levels",payload["report"])
+        with patch.object(server.PluginScanProcess,"scan",return_value={"state":"READY","plugins":[]}):status,_,response=self._request("POST","/api/plugins/scan",b"{}")
+        self.assertEqual(status,200);self.assertEqual(json.loads(response)["scan"]["state"],"READY")
+
+    def test_legacy_openai_helper_checks_offline_before_transport(self):
+        with patch.object(server,"load_config",return_value={"network_mode":"offline"}),patch.object(server.urllib.request,"urlopen") as transport:
+            with self.assertRaises(PermissionError):server.openai_structured("i","u","s",{})
+        transport.assert_not_called()
 
 
 if __name__ == "__main__":

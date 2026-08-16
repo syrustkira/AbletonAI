@@ -421,6 +421,42 @@
       "ableton": "Audio routes remain explicit and host-neutral",
       "n0te_role": "Rejects implicit graph cycles, bounds queues, states realtime exclusions, and models evidenced frame latency without zero-latency claims",
       "status": "implemented"
+    },
+    {
+      "feature": "Standards-conscious offline audio analysis",
+      "ableton": "Analyzes explicit WAV sources without claiming DAW capture",
+      "n0te_role": "PCM16/24/32 and float32 decode, K-weighted gated LUFS-I/M/S/LRA, interpolated true peak, radix-2 FFT/STFT, reference and technical diagnosis",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Offline N0TE DSP and mastering candidate",
+      "ableton": "Produces a separate preview/version and never mutates a Set",
+      "n0te_role": "Gain, polarity, stereo, delay, filters/EQ, compressor, gate, clipper, limiter, de-esser and transient processing with before/after evidence",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Native realtime-safe DSP and audio ring",
+      "ableton": "Host/plugin integration not claimed",
+      "n0te_role": "C11 DSP kernels and bounded lock-free SPSC transport compile and pass sanitizer/native tests on Linux",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Linux consumer product",
+      "ableton": "No unsupported DAW claim on Linux",
+      "n0te_role": "real desktop and /proc discovery plus deterministic private-runtime AppDir builder; runtime/AppImage tool remain external inputs",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Windows consumer product sources",
+      "ableton": "Registry fixtures recognize Ableton, FL Studio and Pro Tools without claiming real Windows acceptance",
+      "n0te_role": "registry/process backends, Windows mutex, private-runtime installer configuration and no-console product contract",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Audio and Plugins product views",
+      "ableton": "Offline analysis and metadata discovery remain distinct from realtime/host execution",
+      "n0te_role": "local WAV analysis and isolated standard-location plugin scanning exposed through companion UI/API",
+      "status": "implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

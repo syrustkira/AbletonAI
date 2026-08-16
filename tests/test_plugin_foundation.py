@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
-from n0te_plugins import PluginRegistry, PluginScanner, PluginScanProcess, SemanticMapping, mapping_valid_for
+from n0te_plugins import PluginRegistry, PluginScanner, PluginScanProcess, SemanticMapping, mapping_valid_for, candidate_mapping
 
 
 class PluginFoundationTests(unittest.TestCase):
@@ -38,6 +38,13 @@ class PluginFoundationTests(unittest.TestCase):
         mapping = SemanticMapping("uid", "1", "421", {"name": "Depth"}, "transient_depth", "manual fixture", 1)
         self.assertTrue(mapping_valid_for(mapping, "uid", "1"))
         self.assertFalse(mapping_valid_for(mapping, "uid", "2"))
+
+    def test_candidate_mapping_never_becomes_verified_automation(self):
+        plugin = PluginScanner().scan([])
+        from n0te_plugins import PluginDescriptor
+        candidate = candidate_mapping(PluginDescriptor("uid", "tool", "VST3", "/fixture", "1", sha256="abc"), {"id": 4, "title": "Attack", "units": "ms"})
+        self.assertEqual(candidate.semantic, "attack_time")
+        self.assertEqual(candidate.verification_status, "CANDIDATE")
 
 
 if __name__ == "__main__":

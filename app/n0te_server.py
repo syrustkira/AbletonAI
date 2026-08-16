@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import logging
 import math
 from logging.handlers import RotatingFileHandler
@@ -50,6 +51,9 @@ from n0te_daw_discovery import AdapterInstallation, DawDiscoveryService
 from n0te_capabilities import ComponentState
 from n0te_macos import MacOSApplicationDiscovery
 from n0te_media import MockStreamBackend
+from n0te_audio import read_wav, analyze, diagnose
+from n0te_plugins import PluginScanProcess
+import tempfile
 
 APP_VERSION = "1.2.4"
 HOST = "127.0.0.1"
@@ -78,6 +82,22 @@ daw_service = DawManagementService(DawDiscoveryService(adapters={"ABLETON_ADAPTE
 proposals: dict[str, dict[str, Any]] = {}
 simplify_proposals: dict[str, dict[str, Any]] = {}
 _snapshot_lock = threading.Lock()
+
+def audio_summary(report):
+    def safe(item):
+        if isinstance(item,float) and not math.isfinite(item):return None
+        if isinstance(item,dict):return {key:safe(value) for key,value in item.items()}
+        if isinstance(item,list):return [safe(value) for value in item]
+        return item
+    value=safe(report)
+    value["levels"].pop("momentary_series",None);value["levels"].pop("short_term_series",None)
+    value["spectrum"].pop("bins",None)
+    return value
+
+def plugin_roots():
+    if sys.platform=="darwin":return [Path.home()/"Library/Audio/Plug-Ins","/Library/Audio/Plug-Ins"]
+    if os.name=="nt":return [Path(os.environ.get("COMMONPROGRAMFILES",r"C:\Program Files\Common Files"))/"VST3",Path(os.environ.get("LOCALAPPDATA",Path.home()))/"Programs/Common/VST3"]
+    return [Path.home()/".vst3",Path.home()/".clap","/usr/lib/vst3","/usr/local/lib/vst3","/usr/lib/clap"]
 _mutation_lock = threading.RLock()
 _proposal_lock = threading.RLock()
 PROPOSAL_TTL_SECONDS = 15 * 60
@@ -473,6 +493,7 @@ def extract_output_text(response: dict[str, Any]) -> str:
 
 
 def openai_structured(instructions: str, user_text: str, schema_name: str, schema: dict[str, Any], max_output_tokens: int = 2600) -> dict[str, Any]:
+    NetworkPolicy.from_value(load_config().get("network_mode", "full")).require("https://api.openai.com/v1/responses")
     key = get_api_key()
     if not key:
         raise DependencyUnavailableError("OpenAI API key is not configured. Open Settings and save a project API key.")
@@ -1391,6 +1412,16 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": "Rejected non-local request origin."}, 403)
             return
         try:
+            if self.path == "/api/audio/analyze":
+                data=self.body_json();encoded=str(data.get("wav_base64") or "")
+                if not encoded:raise ValueError("WAV payload required")
+                raw=base64.b64decode(encoded,validate=True)
+                if len(raw)>700_000:raise ValueError("Audio analysis upload exceeds 700 KB")
+                with tempfile.NamedTemporaryFile(suffix=".wav") as handle:
+                    handle.write(raw);handle.flush();buffer=read_wav(handle.name);full=analyze(buffer);report=audio_summary(full)
+                return self.send_json({"ok":True,"mode":"OFFLINE_ANALYSIS","report":report,"diagnoses":diagnose(full)})
+            if self.path == "/api/plugins/scan":
+                return self.send_json({"ok":True,"scan":PluginScanProcess().scan(plugin_roots(),timeout=15)})
             if self.path == "/api/config":
                 data = self.body_json()
                 if data.get("api_key"):

@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **215 PASS**, including deterministic offline audio measurement/diagnosis, isolated plugin metadata discovery, version-scoped quarantine, cross-platform product paths, ARK feedback rejection/latency modeling, and the existing macOS/product baseline
+- unit/regression/lifecycle tests: **229 PASS**, including multiformat WAV decoding, K-weighted gated loudness, true peak, FFT/STFT, reference/stem analysis, offline DSP/mastering/render authority, native platform discovery, AppDir staging, runtime NetworkPolicy closure, and existing foundations
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Reproducible coverage: **PASS**; real-Live acceptance remains mandatory

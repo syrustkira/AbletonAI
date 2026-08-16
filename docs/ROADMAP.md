@@ -176,3 +176,14 @@ A disposable Set must prove:
 - [x] ARK graph routes fail closed on implicit feedback cycles and report modeled latency without claiming measured realtime performance.
 - [x] Metadata-only VST3/AU/CLAP/AAX discovery runs outside Core and plugin quarantine/semantic evidence is version scoped.
 - [ ] Native plugin instantiation/rendering, certified BS.1770 loudness/true peak, realtime ARK backends, commercial-plugin characterization, listening acceptance, and real-platform packaging remain external/native acceptance work.
+
+## Functional audio and native product pass
+
+- [x] Decode PCM 16/24/32 and IEEE float32 WAV with explicit format rejection and source hashes.
+- [x] Implement K-weighted, absolute/relative gated LUFS-I/M/S and LRA, configurable interpolated true peak, radix-2 FFT/STFT, reference and stem comparisons.
+- [x] Implement offline N0TE DSP, bounded mastering candidates, explicit external-render authority, non-overwriting Song-linked receipts, and analysis history invalidation by source hash.
+- [x] Compile and sanitizer-test native C11 DSP kernels and a bounded SPSC audio ring on Linux x86_64.
+- [x] Execute Linux `.desktop` and `/proc` discovery and validate a private-runtime AppDir builder; add Windows Registry/process/mutex/installer sources.
+- [x] Expose real offline Audio and isolated Plugins views; close the companion server's remaining direct runtime provider policy check.
+- [ ] Official VST3 SDK ingestion and native VST3/Bridge builds are blocked by absent SDK and denied official-repository access; commercial-plugin and real-host evidence require installations.
+- [ ] Certified loudness vectors, listening acceptance, PipeWire/JACK/ALSA runtime, real AppImage tooling, approved private runtime payloads, and target macOS/Windows builds remain external acceptance.

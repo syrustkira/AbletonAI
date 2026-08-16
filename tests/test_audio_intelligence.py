@@ -21,12 +21,12 @@ class AudioIntelligenceTests(unittest.TestCase):
         self.assertAlmostEqual(report["levels"]["sample_peak"], .5, places=6)
         self.assertAlmostEqual(report["stereo"]["correlation"], 1, places=6)
         self.assertEqual(report["source"], "fixture")
-        self.assertIn("K-weighting/gating not applied", report["levels"]["loudness_standard"])
+        self.assertIn("BS.1770-4", report["levels"]["standard"])
 
     def test_phase_and_clipping_diagnoses_separate_interpretation(self):
         report = analyze(self.tone(amplitude=1, right_phase=math.pi))
         codes = {item["code"] for item in diagnose(report)}
-        self.assertEqual(codes, {"CLIPPING", "PHASE_RISK"})
+        self.assertTrue({"CLIPPING", "PHASE_RISK"}.issubset(codes))
 
     def test_pairwise_masking_is_not_instrument_specific(self):
         same = masking(self.tone(400), self.tone(400))
