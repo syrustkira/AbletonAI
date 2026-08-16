@@ -1,0 +1,10 @@
+{
+  "product": "N0TE",
+  "artifact": "N0TE-Linux-Development-x86_64.AppImage",
+  "layout": "AppDir",
+  "runtime_input": "EXTERNAL_BUILD_INPUT",
+  "runtime_requirement": "redistribution-approved CPython tree with bin/python3 and LICENSE",
+  "appimagetool": "EXTERNAL_BUILD_INPUT",
+  "development_build": true,
+  "signed": false
+}

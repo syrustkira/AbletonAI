@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from n0te_state import atomic_write_json
+from n0te_capabilities import ComponentState
+from n0te_network import NetworkPolicy
 
 STATE = Path.home() / ".n0te-ableton-ai"
 CONFIG_PATH = STATE / "config.json"
@@ -27,6 +29,7 @@ OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 KEYCHAIN_SERVICE = "N0TE_Ableton_AI_OpenAI"
 
 PROVIDER_PRESETS: dict[str, dict[str, str]] = {
+    "off": {"label": "AI Off", "base_url": "", "default_model": ""},
     "openai": {"label": "OpenAI", "base_url": "https://api.openai.com/v1", "default_model": "gpt-5.6"},
     "gemini": {"label": "Google Gemini", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "default_model": "gemini-3.6-flash"},
     "ollama": {"label": "Ollama Local", "base_url": "http://127.0.0.1:11434/v1", "default_model": ""},
@@ -174,12 +177,14 @@ def provider_key(provider: str) -> str:
 
 def provider_status() -> dict[str, Any]:
     cfg = provider_config()
-    key_required = cfg["provider"] not in {"ollama"}
+    key_required = cfg["provider"] not in {"off", "ollama"}
     key_ready = bool(provider_key(cfg["provider"])) if key_required else True
+    state = ComponentState.OFF if cfg["provider"] == "off" else (ComponentState.READY if key_ready else ComponentState.UNAVAILABLE)
     return {
         **cfg,
         "key_required": key_required,
         "key_configured": key_ready,
+        "state": state.value,
         "presets": PROVIDER_PRESETS,
         "paid_fallback_enabled": False,
         "note": "Provider switching is explicit. N0TE never falls back to a paid provider automatically.",
@@ -209,6 +214,8 @@ def _provider_endpoint(provider: str, base_url: str = "") -> str:
     if provider not in PROVIDER_PRESETS:
         raise ValueError(f"Unsupported provider: {provider}")
     raw = base_url or PROVIDER_PRESETS[provider]["base_url"]
+    if provider == "off":
+        raise ProviderUnavailableError("AI is intentionally OFF.")
     endpoint = normalize_base_url(raw)
     if not endpoint:
         raise ValueError("A base URL is required for a custom provider.")
@@ -313,6 +320,7 @@ def _read_http_error(exc: urllib.error.HTTPError) -> str:
 
 def _chat_request(provider: str, base_url: str, key: str, chat_payload: dict[str, Any], schema_info: dict[str, Any] | None, timeout: float = 90) -> dict[str, Any]:
     endpoint = _provider_endpoint(provider, base_url)
+    NetworkPolicy.from_value(_load_json(CONFIG_PATH).get("network_mode", "full")).require(endpoint)
     url = endpoint + "/chat/completions"
 
     def send(body: dict[str, Any]) -> dict[str, Any]:
@@ -392,6 +400,11 @@ def routed_urlopen(req_or_url: Any, data: Any = None, timeout: Any = socket._GLO
     if _request_url(req_or_url).rstrip("/") != OPENAI_RESPONSES_URL:
         return _ORIGINAL_URLOPEN(req_or_url, data=data, timeout=timeout, *args, **kwargs)
     cfg = provider_config()
+    if cfg["provider"] == "off":
+        raise ProviderUnavailableError("AI is intentionally OFF; deterministic N0TE features remain available.")
+    NetworkPolicy.from_value(_load_json(CONFIG_PATH).get("network_mode", "full")).require(
+        cfg["base_url"] if cfg["provider"] != "openai" else OPENAI_RESPONSES_URL
+    )
     if cfg["provider"] == "openai":
         return _ORIGINAL_URLOPEN(req_or_url, data=data, timeout=timeout, *args, **kwargs)
     body = _request_body(req_or_url, data)
@@ -412,6 +425,7 @@ def routed_urlopen(req_or_url: Any, data: Any = None, timeout: Any = socket._GLO
 
 def _models_for(provider: str, base_url: str, key: str, timeout: float = 15) -> list[str]:
     endpoint = _provider_endpoint(provider, base_url)
+    NetworkPolicy.from_value(_load_json(CONFIG_PATH).get("network_mode", "full")).require(endpoint)
     req = urllib.request.Request(endpoint + "/models", headers=_authorization_headers(provider, key), method="GET")
     try:
         with _ORIGINAL_URLOPEN(req, timeout=timeout) as response:
@@ -453,7 +467,7 @@ def _update_provider_settings(payload: dict[str, Any]) -> dict[str, Any]:
     base_url = str(payload.get("base_url") or PROVIDER_PRESETS[provider]["base_url"]).strip()
     if provider == "custom" and not base_url:
         raise ValueError("Custom provider requires a base URL.")
-    normalized = _provider_endpoint(provider, base_url)
+    normalized = "" if provider == "off" else _provider_endpoint(provider, base_url)
     key = str(payload.get("api_key") or "").strip()
     if key:
         if provider == "openai":

@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **100 PASS** after canonical packaged-context drift protection
+- unit/regression/lifecycle tests: **229 PASS**, including multiformat WAV decoding, K-weighted gated loudness, true peak, FFT/STFT, reference/stem analysis, offline DSP/mastering/render authority, native platform discovery, AppDir staging, runtime NetworkPolicy closure, and existing foundations
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Reproducible coverage: **PASS**; real-Live acceptance remains mandatory
@@ -72,7 +72,7 @@
 - real third-party plugin parameter exposure
 - availability/quota of any selected cloud AI provider or user credential
 - quality/performance of a selected local Ollama model on the user's Mac
-- real audio analysis, because that N0TE layer is not implemented yet
+- real DAW audio capture, certified loudness/true-peak compliance, listening quality, and realtime performance; deterministic offline measurements are fixture-validated only
 
 ## Deliberately not claimed in 1.2.4
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import logging
 import math
 from logging.handlers import RotatingFileHandler
@@ -18,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-STATE = Path.home() / ".n0te-ableton-ai"
+STATE = Path(os.environ.get("N0TE_STATE_DIR") or (Path.home() / ".n0te-ableton-ai"))
 STATE.mkdir(parents=True, exist_ok=True)
 STATIC = HERE / "static"
 sys.path.insert(0, str(HERE))
@@ -41,6 +42,18 @@ from n0te_discovery import discover, extract_discovery_intent
 from n0te_project import ProjectStore, finish_checklist
 from n0te_state import atomic_write_json
 from n0te_doctor import remote_script_doctor
+from n0te_provider import provider_status
+from n0te_network import NetworkPolicy
+from n0te_intent import IntentRouter
+from n0te_safety import SafetyController
+from n0te_services import CreatorService, DawManagementService
+from n0te_daw_discovery import AdapterInstallation, DawDiscoveryService
+from n0te_capabilities import ComponentState
+from n0te_macos import MacOSApplicationDiscovery
+from n0te_media import MockStreamBackend
+from n0te_audio import read_wav, analyze, diagnose
+from n0te_plugins import PluginScanProcess
+import tempfile
 
 APP_VERSION = "1.2.4"
 HOST = "127.0.0.1"
@@ -51,7 +64,8 @@ SECRET_PATH = STATE / "secrets.json"
 
 _diagnostic_log = logging.getLogger("n0te.diagnostics")
 if not _diagnostic_log.handlers:
-    handler = RotatingFileHandler(STATE / "diagnostics.log", maxBytes=512_000, backupCount=3, encoding="utf-8")
+    log_dir = Path(os.environ.get("N0TE_LOG_DIR") or STATE);log_dir.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(log_dir / "diagnostics.log", maxBytes=512_000, backupCount=3, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     _diagnostic_log.addHandler(handler)
     _diagnostic_log.setLevel(logging.INFO)
@@ -60,9 +74,30 @@ bridge = AbletonBridge()
 context_store = ContextStore(HERE / "context" / "N0TE_CONTEXT_PACK.json", STATE)
 library = LibraryIndex(STATE)
 projects = ProjectStore(STATE)
+intent_router = IntentRouter()
+safety = SafetyController(STATE)
+creator_service = CreatorService(STATE, safety, MockStreamBackend())
+_mac_metadata = MacOSApplicationDiscovery() if sys.platform == "darwin" else None
+daw_service = DawManagementService(DawDiscoveryService(adapters={"ABLETON_ADAPTER": AdapterInstallation("ABLETON_ADAPTER", True, APP_VERSION, ComponentState.READY, ComponentState.READY, True, False)}, metadata_backend=_mac_metadata), STATE / "first_run.json")
 proposals: dict[str, dict[str, Any]] = {}
 simplify_proposals: dict[str, dict[str, Any]] = {}
 _snapshot_lock = threading.Lock()
+
+def audio_summary(report):
+    def safe(item):
+        if isinstance(item,float) and not math.isfinite(item):return None
+        if isinstance(item,dict):return {key:safe(value) for key,value in item.items()}
+        if isinstance(item,list):return [safe(value) for value in item]
+        return item
+    value=safe(report)
+    value["levels"].pop("momentary_series",None);value["levels"].pop("short_term_series",None)
+    value["spectrum"].pop("bins",None)
+    return value
+
+def plugin_roots():
+    if sys.platform=="darwin":return [Path.home()/"Library/Audio/Plug-Ins","/Library/Audio/Plug-Ins"]
+    if os.name=="nt":return [Path(os.environ.get("COMMONPROGRAMFILES",r"C:\Program Files\Common Files"))/"VST3",Path(os.environ.get("LOCALAPPDATA",Path.home()))/"Programs/Common/VST3"]
+    return [Path.home()/".vst3",Path.home()/".clap","/usr/lib/vst3","/usr/local/lib/vst3","/usr/lib/clap"]
 _mutation_lock = threading.RLock()
 _proposal_lock = threading.RLock()
 PROPOSAL_TTL_SECONDS = 15 * 60
@@ -76,6 +111,12 @@ def load_config() -> dict[str, Any]:
         "mode": "produce",
         "context_sync_path": "",
         "auto_refresh_seconds": 5,
+        "ai_provider": "openai",
+        "network_mode": "full",
+        "community_enabled": False,
+        "automatic_update_checking": True,
+        "automatic_safe_install": True,
+        "update_channel": "STABLE",
     }
     if CONFIG_PATH.exists():
         try:
@@ -452,6 +493,7 @@ def extract_output_text(response: dict[str, Any]) -> str:
 
 
 def openai_structured(instructions: str, user_text: str, schema_name: str, schema: dict[str, Any], max_output_tokens: int = 2600) -> dict[str, Any]:
+    NetworkPolicy.from_value(load_config().get("network_mode", "full")).require("https://api.openai.com/v1/responses")
     key = get_api_key()
     if not key:
         raise DependencyUnavailableError("OpenAI API key is not configured. Open Settings and save a project API key.")
@@ -504,6 +546,8 @@ def looks_like_tool_question(text: str) -> bool:
 
 
 def ask_openai(user_text: str, snap: dict[str, Any]) -> dict[str, Any]:
+    if str(load_config().get("ai_provider") or "openai").lower() in {"off", "none"}:
+        raise DependencyUnavailableError("AI is intentionally OFF. Status, project, history, diagnostics, Apply, and Undo remain available.")
     config = load_config()
     context_pack = context_store.load(config.get("context_sync_path") or "")
     song_state = projects.load_song(snap)
@@ -515,7 +559,7 @@ def ask_openai(user_text: str, snap: dict[str, Any]) -> dict[str, Any]:
                 user_text, bridge, library, snap, include_web=True,
                 openverse_token=get_secret("openverse_token"),
                 freesound_key=get_secret("freesound_api_key"),
-                web_threshold=6,
+                web_threshold=6, network_policy=NetworkPolicy.from_value(config.get("network_mode")),
             )
         except Exception as exc:
             discovery_context = {"error": str(exc), "query": user_text}
@@ -615,8 +659,21 @@ Use evidence_labels to distinguish Live-state fact, audio measurement, inference
     return result
 
 
+def deterministic_reply(user_text: str, snap: dict[str, Any]) -> dict[str, Any]:
+    plan = intent_router.route(user_text, snap, projects.load_song(snap))
+    return {
+        "message": plan.message,
+        "decision_summary": plan.job.goal,
+        "actions": plan.actions,
+        "execution_plan": plan.payload(),
+        "evidence": ["Deterministic AI-OFF intent routing; no model provider was invoked."],
+        "needs_audio": False,
+    }
+
+
 def apply_proposal(proposal_id: str) -> dict[str, Any]:
     with _mutation_lock:
+        safety.require_mutation_authority()
         cleanup_proposals()
         prop = _proposal_get(proposals, proposal_id)
         if not prop:
@@ -1233,6 +1290,11 @@ def status_payload() -> dict[str, Any]:
             "openverse_token": bool(get_secret("openverse_token")),
             "freesound_api_key": bool(get_secret("freesound_api_key")),
         },
+        "services": {
+            "ai": provider_status(),
+            "network": NetworkPolicy.from_value(config.get("network_mode")).status(),
+            "community": {"state": "READY" if config.get("community_enabled") else "OFF"},
+        },
     }
     try:
         snap = get_snapshot()
@@ -1260,6 +1322,8 @@ def local_request_allowed(host: str, origin: str = "") -> bool:
 
 
 def error_status(exc: Exception) -> int:
+    if isinstance(exc, PermissionError):
+        return 403
     if isinstance(exc, OverflowError):
         return 413
     if isinstance(exc, (ValueError, json.JSONDecodeError)):
@@ -1325,6 +1389,19 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == "/api/engineer":
                 self.send_json({"ok": True, "data": engineer_status()})
                 return
+            if self.path == "/api/artist-world":
+                return self.send_json({"ok": True, "artist_world": creator_service.artist_read()})
+            if self.path == "/api/creator/projects":
+                return self.send_json({"ok": True, "projects": creator_service.projects()})
+            if self.path == "/api/stream":
+                return self.send_json({"ok": True, "stream": creator_service.stream_state()})
+            if self.path == "/api/daws":
+                return self.send_json({"ok": True, "label": "Detect DAWs", "integrations": daw_service.integrations()})
+            if self.path == "/api/setup":
+                return self.send_json({"ok": True, "setup": daw_service.first_run_status(), "integrations": daw_service.integrations()})
+            if self.path == "/api/updates":
+                config=load_config(); offline=NetworkPolicy.from_value(config.get("network_mode")).status()["intentional_offline"]
+                return self.send_json({"ok":True,"updates":{"state":"PAUSED_BY_NETWORK_POLICY" if offline else "IDLE","intentional_offline":offline,"channel":config.get("update_channel","STABLE"),"automatic_checking":bool(config.get("automatic_update_checking",True)),"automatic_safe_install":bool(config.get("automatic_safe_install",True)),"release_signature_status":"NOT_CHECKED","pending_components":[],"pending_host_closes":[],"pending_restart":False,"rollback_available":False}})
             return super().do_GET()
         except Exception as exc:
             _diagnostic_log.error("GET %s: %s", self.path[:300], type(exc).__name__)
@@ -1335,6 +1412,16 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": "Rejected non-local request origin."}, 403)
             return
         try:
+            if self.path == "/api/audio/analyze":
+                data=self.body_json();encoded=str(data.get("wav_base64") or "")
+                if not encoded:raise ValueError("WAV payload required")
+                raw=base64.b64decode(encoded,validate=True)
+                if len(raw)>700_000:raise ValueError("Audio analysis upload exceeds 700 KB")
+                with tempfile.NamedTemporaryFile(suffix=".wav") as handle:
+                    handle.write(raw);handle.flush();buffer=read_wav(handle.name);full=analyze(buffer);report=audio_summary(full)
+                return self.send_json({"ok":True,"mode":"OFFLINE_ANALYSIS","report":report,"diagnoses":diagnose(full)})
+            if self.path == "/api/plugins/scan":
+                return self.send_json({"ok":True,"scan":PluginScanProcess().scan(plugin_roots(),timeout=15)})
             if self.path == "/api/config":
                 data = self.body_json()
                 if data.get("api_key"):
@@ -1344,11 +1431,36 @@ class Handler(SimpleHTTPRequestHandler):
                 if data.get("openverse_token"):
                     store_secret("openverse_token", str(data["openverse_token"]))
                 config = load_config()
-                for key in ("model", "mode", "context_sync_path", "auto_refresh_seconds"):
+                for key in ("model", "mode", "context_sync_path", "auto_refresh_seconds", "ai_provider", "network_mode", "community_enabled", "automatic_update_checking", "automatic_safe_install", "update_channel"):
                     if key in data:
                         config[key] = data[key]
                 save_config(config)
                 return self.send_json({"ok": True, "api_key": bool(get_api_key()), "config": config, "providers": {"openverse_token": bool(get_secret("openverse_token")), "freesound_api_key": bool(get_secret("freesound_api_key"))}})
+
+            if self.path == "/api/artist-world":
+                return self.send_json({"ok": True, "artist_world": creator_service.artist_update(self.body_json())})
+            if self.path == "/api/setup":
+                return self.send_json({"ok": True, "setup": daw_service.first_run_advance(self.body_json()), "integrations": daw_service.integrations()})
+            if self.path == "/api/daws/ableton":
+                data=self.body_json();operation=str(data.get("operation") or "verify")
+                evidence=remote_script_doctor(STATE)
+                if operation in {"verify","diagnostics"}:return self.send_json({"ok":True,"operation":operation,"doctor":evidence,"deep_acceptance":False})
+                return self.send_json({"ok":False,"error":"Ableton integration install/repair requires a verified bundled adapter payload in this development build.","doctor":evidence},503)
+            if self.path == "/api/creator/projects":
+                data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.project_create(str(data.get("song_id") or ""),str(data.get("title") or "Untitled"))})
+            if self.path == "/api/creator/recipe":
+                data=self.body_json(); return self.send_json({"ok":True,"recipe":creator_service.recipe(str(data.get("project_id") or ""),str(data.get("recipe") or ""),data.get("sections") or [],data.get("marks") or [],str(data.get("aspect") or "9:16"),str(data.get("artist_mode") or "USE_ARTIST_WORLD"))})
+            if self.path == "/api/creator/edit":
+                data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.edit(str(data.get("project_id") or ""),int(data.get("index",-1)),str(data.get("operation") or ""),data.get("params") or {})})
+            if self.path == "/api/creator/visibility":
+                data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.visibility(str(data.get("project_id") or ""),str(data.get("visibility") or ""),str(data.get("authority") or ""),bool(data.get("explicit")))})
+            if self.path == "/api/stream":
+                data=self.body_json();op=str(data.get("operation") or "state")
+                if op=="test": value=creator_service.stream_test(str(data.get("scene") or "PRODUCING"))
+                elif op=="go_live": value=creator_service.stream_live(str(data.get("scene") or "PRODUCING"),str(data.get("authority") or ""),bool(data.get("explicit")),bool(data.get("reconnect")))
+                elif op=="stop": value=creator_service.stream_stop()
+                else: value=creator_service.stream_state()
+                return self.send_json({"ok":True,"stream":value})
 
             if self.path == "/api/chat":
                 data = self.body_json()
@@ -1356,7 +1468,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if not text:
                     raise RuntimeError("Message is empty.")
                 snap = get_snapshot(force=True)
-                reply = ask_openai(text, snap)
+                ai_off = str(load_config().get("ai_provider") or "openai").lower() in {"off", "none"}
+                reply = deterministic_reply(text, snap) if ai_off else ask_openai(text, snap)
                 pid = str(int(time.time() * 1000))
                 cleanup_proposals()
                 with _proposal_lock:
@@ -1380,6 +1493,17 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == "/api/undo_live":
                 with _mutation_lock:
                     return self.send_json(native_undo())
+
+            if self.path == "/api/safe":
+                data = self.body_json()
+                enabled = bool(data.get("enabled", True))
+                if enabled:
+                    state = safety.enter(str(data.get("reason") or "user"))
+                    with _proposal_lock:
+                        proposals.clear(); simplify_proposals.clear()
+                else:
+                    state = safety.leave(explicit_user_confirmation=bool(data.get("confirm")))
+                return self.send_json({"ok": True, "safety": state})
 
             if self.path == "/api/refresh":
                 snap = get_snapshot(force=True)
@@ -1418,6 +1542,7 @@ class Handler(SimpleHTTPRequestHandler):
                     freesound_key=get_secret("freesound_api_key"),
                     web_threshold=int(data.get("web_threshold") or 6),
                     license_filter=str(data.get("license_filter") or ""),
+                    network_policy=NetworkPolicy.from_value(load_config().get("network_mode")),
                 )
                 return self.send_json({"ok": True, "result": result})
 
@@ -1541,7 +1666,8 @@ def main() -> None:
     print(f"N0TE Ableton AI {APP_VERSION}")
     print(f"UI: http://{HOST}:{PORT}")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    threading.Timer(0.7, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
+    first_run = not (STATE / "first_run.json").is_file()
+    threading.Timer(0.7, lambda: webbrowser.open(f"http://{HOST}:{PORT}/?first_run=1" if first_run else f"http://{HOST}:{PORT}")).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
