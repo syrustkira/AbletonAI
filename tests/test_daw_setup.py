@@ -124,11 +124,38 @@ class DawSetupTests(unittest.TestCase):
                 True,
                 True,
                 {"READY": 46, "DEGRADED": 1, "NEEDS_REVALIDATION": 2},
+                True,
+                "fixture-doctor",
             )
             row = DawDiscoveryService([root], {"ABLETON_ADAPTER": adapter}, platform_name="darwin").discover()[0]
             self.assertTrue(row.installed and row.adapter_installed)
+            self.assertTrue(row.adapter_evidence_verified)
+            self.assertEqual(row.adapter_evidence_source, "fixture-doctor")
             self.assertEqual(row.aggregate_health, ComponentState.DEGRADED)
             self.assertEqual(row.capability_counts["READY"], 46)
+
+    def test_unverified_adapter_claim_cannot_promote_ready_health(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "Live 12.4.app").mkdir()
+            claimed = AdapterInstallation(
+                "ABLETON_ADAPTER",
+                True,
+                "1.8.3",
+                ComponentState.READY,
+                ComponentState.READY,
+                True,
+                False,
+                {"READY": 49},
+            )
+            row = DawDiscoveryService([root], {"ABLETON_ADAPTER": claimed}, platform_name="darwin").discover()[0]
+            self.assertTrue(row.installed)
+            self.assertFalse(row.adapter_installed)
+            self.assertFalse(row.adapter_evidence_verified)
+            self.assertEqual(row.aggregate_health, ComponentState.UNAVAILABLE)
+            self.assertEqual(row.connection_state, ComponentState.UNAVAILABLE)
+            self.assertEqual(row.capability_counts, {})
+            self.assertTrue(row.repair_available)
 
 
 if __name__ == "__main__":
