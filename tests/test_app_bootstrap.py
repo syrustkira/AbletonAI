@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import tempfile
@@ -53,7 +54,7 @@ class AppBootstrapTests(unittest.TestCase):
             self.assertLess(events.index("ensure"), events.index("provider"))
             self.assertEqual(events[-3:], ["lock", "server", "unlock"])
 
-    def test_packaged_provider_bootstrap_rebinds_state_and_exposes_actual_route(self):
+    def test_packaged_provider_bootstrap_rebinds_state_exposes_route_and_seeds_safe_config(self):
         with tempfile.TemporaryDirectory() as td:
             state = Path(td)
             provider = types.ModuleType("n0te_provider")
@@ -73,6 +74,11 @@ class AppBootstrapTests(unittest.TestCase):
                 self.assertEqual(provider.STATE, state)
                 self.assertEqual(provider.CONFIG_PATH, state / "config.json")
                 self.assertEqual(provider.SECRET_PATH, state / "secrets.json")
+                seeded = json.loads((state / "config.json").read_text(encoding="utf-8"))
+                self.assertEqual(seeded["ai_provider"], "off")
+                self.assertEqual(seeded["network_mode"], "offline")
+                self.assertFalse(seeded["automatic_update_checking"])
+                self.assertFalse(seeded["automatic_safe_install"])
                 self.assertEqual(os.environ["N0TE_ROUTED_PROVIDER_BASE_URL"], "http://127.0.0.1:11434/v1")
                 gemini.install.assert_called_once_with(provider)
                 provider.install_provider_router.assert_called_once_with(start_switchboard=False)
