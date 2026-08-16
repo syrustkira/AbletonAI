@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **258 PASS**, including atomic reconnect identity, fail-closed compatibility defaults, floating-point headroom, DSP transfer references, channel-layout-aware loudness, bounded streaming levels/true peak, scoped analysis history, professional rendering/dither, iterative mastering, and durable plugin identity/quarantine
+- unit/regression/lifecycle tests: **268 PASS**, including atomic reconnect identity, fail-closed compatibility and network defaults, partial/corrupt runtime-config recovery, Vault outward-privacy enforcement, scoped creative-intent conflicts, objective-bound audition scoring, Song-product recovery, plugin-first portability assessment, floating-point headroom, DSP transfer references, channel-layout-aware loudness, bounded streaming levels/true peak, scoped analysis history, professional rendering/dither, iterative mastering, and durable plugin identity/quarantine
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Reproducible coverage: **PASS**; real-Live acceptance remains mandatory
@@ -48,6 +48,15 @@
 - existing Responses-style structured requests are translated to Chat Completions for non-Gemini compatible providers while retaining the JSON Schema contract
 - Chat Completions structured output is converted back into N0TE's existing response shape
 - provider selection is explicit; no automatic paid-provider fallback is enabled
+
+## Fail-closed local runtime regressions covered
+
+- a fresh unconfigured runtime seeds AI `off`, network `offline`, community disabled, and automatic network update/install behavior disabled
+- valid existing user choices are preserved; only missing safety defaults are filled
+- corrupt runtime config bytes are preserved under `Recovery/` before safe defaults replace the unreadable active config
+- explicit First Run OFF/OFFLINE choices synchronize into the runtime config
+- `NetworkPolicy()` and an absent/unknown network-mode value fail closed to OFFLINE while retaining loopback access for local N0TE components
+- provider-transport characterization must explicitly opt into an online provider rather than relying on an unsafe implicit default
 
 ## Hardening carried from 1.2.1+
 
@@ -112,4 +121,4 @@ Reproducible dependency-free statement-coverage command: `bash scripts/coverage.
 
 ## Song-centered product workflow validation
 
-The portable product layer now persists session operating goals and evidence-only debriefs, distinguishes provenance/privacy and technical/creative evidence, queues unresolved ear decisions, creates loudness-matched offline audition comparisons without choosing taste, derives non-prescriptive Mix and Signal evidence, produces truthful portability plans, and connects delivery authority to existing professional render receipts. Automated validation covers persistence, no-overwrite/output authority, version branches, cautious taste maturity, modeled-versus-measured labels, and capability-scoped health. Native VST3, Bridge, ARK, real DAW migration, and listening acceptance remain explicitly unverified.
+The portable product layer now persists session operating goals and evidence-only debriefs, distinguishes provenance/privacy and technical/creative evidence, queues unresolved ear decisions, creates loudness-matched offline audition comparisons without choosing taste, derives non-prescriptive Mix and Signal evidence, produces truthful portability plans, and connects delivery authority to existing professional render receipts. Hardening now requires explicit exit-condition evidence before a session is called complete, prevents Vault evidence from becoming AI/sync/publication/community content, scopes Creative Twin conflicts to relevant evidence, refuses generic measurement winners without a job-specific objective, preserves corrupt Song-product state for recovery, checks third-party plugin portability before labeling a device host-native, labels authority output as a policy summary rather than live authorization, and records unavailable pre-render evidence explicitly rather than silently. Native VST3, Bridge, ARK, real DAW migration/capture, and listening acceptance remain explicitly unverified.
