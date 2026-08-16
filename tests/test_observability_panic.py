@@ -1,6 +1,8 @@
 import unittest,sys
 from pathlib import Path
+from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/"app"))
+import n0te_observability
 from n0te_observability import ObservabilityEngine
 from n0te_panic import *
 class Adapter:
@@ -9,7 +11,11 @@ class Adapter:
 class ObservabilityPanicTests(unittest.TestCase):
  def test_observability_reports_truth_and_labels_unsupported_metrics(self):
   x=ObservabilityEngine().sample(daw_online=False,ai={"state":"OFF"},network={"mode":"OFFLINE"},community={"state":"OFF"},safety={"safe":True},recovery={"recovery_required":False,"quarantine":{"camera":{}}},song="s",workspace="w")
-  self.assertGreater(x["compact"]["rss_bytes"],0);self.assertEqual(x["compact"]["ai_state"],"OFF");self.assertFalse(x["compact"]["daw_online"]);self.assertIn("audio_xruns",x["detailed"]["unsupported_metrics"])
+  if n0te_observability._resource is not None:self.assertGreater(x["compact"]["rss_bytes"],0)
+  self.assertEqual(x["compact"]["ai_state"],"OFF");self.assertFalse(x["compact"]["daw_online"]);self.assertIn("audio_xruns",x["detailed"]["unsupported_metrics"])
+ def test_observability_remains_truthful_without_resource_module(self):
+  with patch.object(n0te_observability,"_resource",None):x=ObservabilityEngine().sample(daw_online=False,ai={"state":"OFF"},network={"mode":"OFFLINE"},community={"state":"OFF"},safety={"safe":False},recovery={"recovery_required":False})
+  self.assertIsNone(x["compact"]["rss_bytes"]);self.assertIn("process_rss",x["detailed"]["unsupported_metrics"])
  def test_panic_clears_only_after_confirmed_host_execution(self):
   p=MusicalPanic();n=GeneratedNote("w","vision","synth",1,60);p.note_on(n);p.set_sustain("w","vision","synth",1,True)
   unknown=Adapter("UNKNOWN");self.assertFalse(p.execute("w",unknown));self.assertIn(n,p.notes);self.assertTrue(p.recovery_required)
