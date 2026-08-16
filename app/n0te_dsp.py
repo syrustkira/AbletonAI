@@ -98,11 +98,13 @@ class Limiter(Processor):
     def __init__(self,ceiling_db=-1,lookahead_ms=5,release_ms=50,**kw):super().__init__(**kw);self.ceiling_db=ceiling_db;self.lookahead_ms=lookahead_ms;self.release_ms=release_ms
     def process(self,b):
         if self.bypass:return b
-        look=max(0,round(self.lookahead_ms*.001*b.sample_rate));self.latency_frames=look;ceiling=10**(self.ceiling_db/20);release=math.exp(-1/(max(.01,self.release_ms)*.001*b.sample_rate));out=[[] for _ in b.channels];gain=1.;frames=list(zip(*b.channels))
+        look=max(0,round(self.lookahead_ms*.001*b.sample_rate));self.latency_frames=look;self.offline_latency_compensated=True;ceiling=10**(self.ceiling_db/20);release=math.exp(-1/(max(.01,self.release_ms)*.001*b.sample_rate));out=[[] for _ in b.channels];gain=1.;frames=list(zip(*b.channels))
+        # Offline rendering can inspect future samples without physically delaying
+        # the output. This is equivalent to compensating the realtime lookahead
+        # latency and, critically, preserves the final lookahead window.
         for i,frame in enumerate(frames):
             future=max((abs(x) for f in frames[i:min(len(frames),i+look+1)] for x in f),default=0);target=min(1,ceiling/future) if future else 1;gain=min(gain,target) if target<gain else release*gain+(1-release)*target
-            delayed=frames[i-look] if i>=look else tuple(0. for _ in frame)
-            for c,x in enumerate(delayed):out[c].append(max(-ceiling,min(ceiling,x*gain)))
+            for c,x in enumerate(frame):out[c].append(max(-ceiling,min(ceiling,x*gain)))
         return self._done(b,out)
 
 
