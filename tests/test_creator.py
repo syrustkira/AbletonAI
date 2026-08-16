@@ -21,6 +21,11 @@ class CreatorTests(unittest.TestCase):
  def test_recipe_and_quick_edit_work_ai_off(self):
   with tempfile.TemporaryDirectory() as td:
    e=CreatorEngine(Path(td),Safe());p=e.create("song","build");plan=e.recipe(p,Recipe.BEAT_BUILD,[{"name":"Chorus","start":32,"end":48}],[{"id":"mark"}],aspect="9:16")
-   self.assertFalse(plan["ai_required"]);self.assertEqual(plan["marks"],["mark"])
+   self.assertFalse(plan["ai_required"]);self.assertEqual(plan["marks"],["mark"]);self.assertEqual(plan["revision"],2)
    e.add_edit(p,0,EditOperation.CAPTION,text="Chorus arrives");self.assertEqual(p.timeline[0].operations[0]["operation"],"CAPTION")
+ def test_recipe_change_invalidates_prior_publication_approval_and_persists_revision(self):
+  with tempfile.TemporaryDirectory() as td:
+   e=CreatorEngine(Path(td),Safe());p=e.create("song","clip");e.set_visibility(p,Visibility.PUBLIC,authority="user",explicit=True);approved_revision=p.revision;self.assertTrue(p.publication_approved)
+   e.recipe(p,Recipe.STUDIO_STORY,[{"name":"Verse","start":0,"end":8}],[]);self.assertGreater(p.revision,approved_revision);self.assertFalse(p.publication_approved)
+   restored=e.get(p.id);self.assertEqual(restored.revision,p.revision);self.assertFalse(restored.publication_approved)
 if __name__=="__main__":unittest.main()
