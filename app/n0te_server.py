@@ -45,7 +45,9 @@ from n0te_provider import provider_status
 from n0te_network import NetworkPolicy
 from n0te_intent import IntentRouter
 from n0te_safety import SafetyController
-from n0te_services import CreatorService
+from n0te_services import CreatorService, DawManagementService
+from n0te_daw_discovery import AdapterInstallation, DawDiscoveryService
+from n0te_capabilities import ComponentState
 from n0te_media import MockStreamBackend
 
 APP_VERSION = "1.2.4"
@@ -69,6 +71,7 @@ projects = ProjectStore(STATE)
 intent_router = IntentRouter()
 safety = SafetyController(STATE)
 creator_service = CreatorService(STATE, safety, MockStreamBackend())
+daw_service = DawManagementService(DawDiscoveryService(adapters={"ABLETON_ADAPTER": AdapterInstallation("ABLETON_ADAPTER", True, APP_VERSION, ComponentState.READY, ComponentState.READY, True, False)}), STATE / "first_run.json")
 proposals: dict[str, dict[str, Any]] = {}
 simplify_proposals: dict[str, dict[str, Any]] = {}
 _snapshot_lock = threading.Lock()
@@ -88,6 +91,9 @@ def load_config() -> dict[str, Any]:
         "ai_provider": "openai",
         "network_mode": "full",
         "community_enabled": False,
+        "automatic_update_checking": True,
+        "automatic_safe_install": True,
+        "update_channel": "STABLE",
     }
     if CONFIG_PATH.exists():
         try:
@@ -1365,6 +1371,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True, "projects": creator_service.projects()})
             if self.path == "/api/stream":
                 return self.send_json({"ok": True, "stream": creator_service.stream_state()})
+            if self.path == "/api/daws":
+                return self.send_json({"ok": True, "label": "Detect DAWs", "integrations": daw_service.integrations()})
+            if self.path == "/api/setup":
+                return self.send_json({"ok": True, "setup": daw_service.first_run_status(), "integrations": daw_service.integrations()})
+            if self.path == "/api/updates":
+                config=load_config(); offline=NetworkPolicy.from_value(config.get("network_mode")).status()["intentional_offline"]
+                return self.send_json({"ok":True,"updates":{"state":"PAUSED_BY_NETWORK_POLICY" if offline else "IDLE","intentional_offline":offline,"channel":config.get("update_channel","STABLE"),"automatic_checking":bool(config.get("automatic_update_checking",True)),"automatic_safe_install":bool(config.get("automatic_safe_install",True)),"release_signature_status":"NOT_CHECKED","pending_components":[],"pending_host_closes":[],"pending_restart":False,"rollback_available":False}})
             return super().do_GET()
         except Exception as exc:
             _diagnostic_log.error("GET %s: %s", self.path[:300], type(exc).__name__)
@@ -1384,7 +1397,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if data.get("openverse_token"):
                     store_secret("openverse_token", str(data["openverse_token"]))
                 config = load_config()
-                for key in ("model", "mode", "context_sync_path", "auto_refresh_seconds", "ai_provider", "network_mode", "community_enabled"):
+                for key in ("model", "mode", "context_sync_path", "auto_refresh_seconds", "ai_provider", "network_mode", "community_enabled", "automatic_update_checking", "automatic_safe_install", "update_channel"):
                     if key in data:
                         config[key] = data[key]
                 save_config(config)
@@ -1392,6 +1405,8 @@ class Handler(SimpleHTTPRequestHandler):
 
             if self.path == "/api/artist-world":
                 return self.send_json({"ok": True, "artist_world": creator_service.artist_update(self.body_json())})
+            if self.path == "/api/setup":
+                return self.send_json({"ok": True, "setup": daw_service.first_run_advance(self.body_json()), "integrations": daw_service.integrations()})
             if self.path == "/api/creator/projects":
                 data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.project_create(str(data.get("song_id") or ""),str(data.get("title") or "Untitled"))})
             if self.path == "/api/creator/recipe":

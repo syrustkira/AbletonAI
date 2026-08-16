@@ -155,6 +155,14 @@ class ServerRouteCharacterizationTests(unittest.TestCase):
         status, _, body = self._request("POST", "/api/stream", b'{"operation":"go_live","scene":"PRODUCING","authority":"user","explicit":true,"reconnect":true}')
         self.assertEqual(status, 403); self.assertFalse(json.loads(body)["ok"])
 
+    def test_daw_and_update_routes_distinguish_detection_from_offline_pause(self):
+        with patch.object(server.daw_service, "integrations", return_value=[{"host_family":"LOGIC_PRO","installed":True,"implementation_maturity":"DETECTED_UNSUPPORTED","target_maturity":"DEEP"}]):
+            status, _, body = self._request("GET", "/api/daws")
+        payload=json.loads(body);self.assertEqual(status,200);self.assertEqual(payload["label"],"Detect DAWs");self.assertEqual(payload["integrations"][0]["target_maturity"],"DEEP")
+        with patch.object(server, "load_config", return_value={"network_mode":"offline","update_channel":"STABLE","automatic_update_checking":True,"automatic_safe_install":True}):
+            status, _, body = self._request("GET", "/api/updates")
+        payload=json.loads(body)["updates"];self.assertEqual(status,200);self.assertEqual(payload["state"],"PAUSED_BY_NETWORK_POLICY");self.assertTrue(payload["intentional_offline"])
+
 
 if __name__ == "__main__":
     unittest.main()

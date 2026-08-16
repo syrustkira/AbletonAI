@@ -12,6 +12,21 @@ class PayloadFile:source:str;destination:str;sha256:str
 @dataclass
 class DistributionComponent:
  id:str;version:str;platforms:list[str];architectures:list[str];files:list[PayloadFile];dependencies:list[str]=field(default_factory=list);optional:bool=False;restart_required:bool=False;in_use_restricted:bool=False;rollback_source:str="";preserve_user_data:bool=True;verification:str="sha256";redistribution_status:str="approved"
+@dataclass(frozen=True)
+class ThirdPartyComponent:name:str;version:str;license:str;source_project:str;redistribution_status:str;notice_location:str
+def validate_third_party_inventory(items):
+ for item in items:
+  if item.redistribution_status not in {"approved","system_not_bundled"}:raise PermissionError(f"Unknown redistribution status: {item.name}")
+  if item.redistribution_status=="approved" and (not item.license or not item.notice_location):raise ValueError(f"Missing license notice: {item.name}")
+ return True
+@dataclass(frozen=True)
+class PrivateRuntimeManifest:version:str;platform:str;architecture:str;payload_path:str;sha256:str;redistribution_status:str
+def validate_private_runtime(runtime:PrivateRuntimeManifest,root:Path):
+ if runtime.redistribution_status!="approved":raise PermissionError("Private runtime redistribution is not approved")
+ payload=Path(root)/runtime.payload_path
+ if not payload.is_file():raise FileNotFoundError("Private runtime payload is required; offline builds never download it")
+ if _hash(payload)!=runtime.sha256:raise ValueError("Private runtime hash mismatch")
+ return True
 class DistributionBuilder:
  EXCLUDED={".git","tests","__pycache__",".coverage"}
  SECRET_NAMES={"api_key","secrets.json","credentials.json"}

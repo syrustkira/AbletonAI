@@ -1,8 +1,11 @@
 from dataclasses import dataclass,field
 from enum import Enum
-class Component(str,Enum):CORE="CORE";STANDALONE="STANDALONE";ARK="ARK";ABLETON_ADAPTER="ABLETON_ADAPTER";VST3="VST3";AU="AU";AAX="AAX";CLAP="CLAP";LOCAL_AI="LOCAL_AI";OFFLINE_KNOWLEDGE="OFFLINE_KNOWLEDGE";CREATOR="CREATOR";OBS_ADAPTER="OBS_ADAPTER";CAMERA_COMPONENTS="CAMERA_COMPONENTS"
+class Component(str,Enum):CORE="CORE";STANDALONE="STANDALONE";ARK="ARK";ABLETON_ADAPTER="ABLETON_ADAPTER";LOGIC_ADAPTER="LOGIC_ADAPTER";FL_STUDIO_ADAPTER="FL_STUDIO_ADAPTER";PRO_TOOLS_ADAPTER="PRO_TOOLS_ADAPTER";VST3="VST3";AU="AU";AAX="AAX";CLAP="CLAP";LOCAL_AI="LOCAL_AI";OFFLINE_KNOWLEDGE="OFFLINE_KNOWLEDGE";CREATOR="CREATOR";OBS_ADAPTER="OBS_ADAPTER";CAMERA_COMPONENTS="CAMERA_COMPONENTS"
 @dataclass
 class ComponentManifest:id:Component;version:str;platforms:set[str];architectures:set[str];dependencies:set[Component]=field(default_factory=set);optional_dependencies:set[Component]=field(default_factory=set);files:dict[str,str]=field(default_factory=dict);restart_required:bool=False;in_use:bool=False;rollback_source:str="";preserve_user_data:bool=True;capability_fixes:set[str]=field(default_factory=set);capability_revalidation:set[str]=field(default_factory=set);capabilities_unchanged:set[str]=field(default_factory=set)
+@dataclass
+class HostAdapterManifest:
+ component_id:Component;host_family:str;adapter_version:str;protocol_version:str;supported_platforms:set[str];supported_architectures:set[str];supported_host_versions:set[str];required_core_version:str;dependencies:set[Component]=field(default_factory=set);implementation_maturity:str="DETECTED_UNSUPPORTED";target_maturity:str="DEEP";capabilities:dict=field(default_factory=dict);host_extensions:set[str]=field(default_factory=set);payload_hashes:dict[str,str]=field(default_factory=dict);verification_rules:list[str]=field(default_factory=list);installation_destinations:list[str]=field(default_factory=list);restart_required:bool=False;host_close_required:bool=True;rollback_source:str="";preserve_user_data:bool=True
 class PackagingPlanner:
  def __init__(self,manifests):self.items={m.id:m for m in manifests}
  def install(self,selected,platform,arch):

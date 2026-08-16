@@ -152,3 +152,11 @@ A disposable Set must prove:
 ## Permanent engineering rule
 
 **No new N0TE feature category unless a real music session exposes the need, or it fixes reliability/safety.**
+
+## Product distribution and host management
+
+- [x] Shared **Detect DAWs** service recognizes Ableton Live, Logic Pro, FL Studio, and Pro Tools, retains multiple installations, and keeps detection separate from adapter support and Song identity.
+- [x] First-run can finish healthily with no DAW, AI OFF, Network OFFLINE, no OBS, no camera, and no Local AI.
+- [x] Component-aware updater supports stable/opt-in channels, NetworkPolicy pause, signed manifest and payload verification, minimal plans, host-close deferral, rollback, and offline `.n0teupdate` import.
+- [x] Adapter updates report fixed, revalidation-required, and unchanged capabilities without suppressing healthy paths.
+- [ ] Provision production release signing keys, private runtime payloads, native installer execution, and real-host compatibility evidence during external release acceptance.

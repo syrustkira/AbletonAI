@@ -331,6 +331,36 @@
       "ableton": "first validated DEEP adapter",
       "n0te_role": "all officially supported DAWs target DEEP; read/observe may use assumed compatibility while automatic mutation requires verified compatibility plus Gate 1",
       "status": "partially_implemented"
+    },
+    {
+      "feature": "Generic DAW discovery and first-run management",
+      "ableton": "one recognized host family; multiple versions retained",
+      "n0te_role": "shared Detect DAWs service for setup/runtime/settings/diagnostics/updater; unsupported detection is healthy",
+      "status": "implemented"
+    },
+    {
+      "feature": "Component-aware Update Engine",
+      "ableton": "adapter updates defer while host is open",
+      "n0te_role": "signed manifests, minimal component plans, NetworkPolicy pause, staging, rollback, and policy/Song preservation",
+      "status": "implemented"
+    },
+    {
+      "feature": "Offline update packages",
+      "ableton": "adapter payload may be included when genuinely built",
+      "n0te_role": "signed .n0teupdate import verifies manifest and payload without network",
+      "status": "implemented"
+    },
+    {
+      "feature": "Production update signing and native installer integration",
+      "ableton": "real adapter/native payload acceptance required",
+      "n0te_role": "signature verifier boundary exists; release-key provisioning and native install execution remain external",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "Private Python runtime payload",
+      "ableton": "not host-specific",
+      "n0te_role": "deterministic fail-closed build manifest; redistributable runtime payload must be supplied by native release build",
+      "status": "external_acceptance_pending"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

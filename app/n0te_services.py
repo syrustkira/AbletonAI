@@ -4,6 +4,13 @@ from pathlib import Path
 from typing import Any
 from n0te_creator import ArtistMode,ArtistWorld,ArtistWorldStore,CreatorEngine,EditOperation,Recipe,Visibility
 from n0te_media import MockSocialAdapter,PublicationEngine,PublicationRecord,StreamEngine,StreamScene
+from n0te_setup import FirstRunService
+class DawManagementService:
+ """One application façade over the shared detector for setup/runtime/settings/diagnostics."""
+ def __init__(self,discovery,setup_path):self.discovery=discovery;self.setup=FirstRunService(setup_path,discovery)
+ def integrations(self,include_missing=True):return [x.status() for x in self.discovery.discover(include_missing=include_missing)]
+ def first_run_status(self):return self.setup.status()
+ def first_run_advance(self,data):return self.setup.advance(data)
 class CreatorService:
  """Application orchestration; domain engines retain all authority rules."""
  def __init__(self,state:Path,safety,stream_backend):
