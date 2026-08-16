@@ -397,6 +397,30 @@
       "ableton": "disposable Set checklist and per-capability evidence store prepared",
       "n0te_role": "real host execution remains required before VERIFIED or Song-Ready claims",
       "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "Deterministic offline Audio Intelligence",
+      "ableton": "Consumes explicit audio buffers/files; does not claim Live audio capture",
+      "n0te_role": "Measures level, ungated loudness estimate, spectrum, dynamics, stereo, pairwise masking, careful diagnosis, and bounded gain previews",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Cross-platform product data paths",
+      "ableton": "Host state remains separate from product state",
+      "n0te_role": "macOS Application Support, Windows roaming/local AppData, and Linux XDG data/cache/state separation",
+      "status": "implemented"
+    },
+    {
+      "feature": "Plugin discovery and isolation foundation",
+      "ableton": "Does not load or modify DAW plugins",
+      "n0te_role": "Metadata-only VST3/AU/CLAP/AAX discovery in an isolated subprocess, version-scoped quarantine, and evidence-bound semantic mappings; native hosting remains external",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "ARK feedback and latency safety",
+      "ableton": "Audio routes remain explicit and host-neutral",
+      "n0te_role": "Rejects implicit graph cycles, bounds queues, states realtime exclusions, and models evidenced frame latency without zero-latency claims",
+      "status": "implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

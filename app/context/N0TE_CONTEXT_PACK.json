@@ -210,7 +210,8 @@
     "Recursive Rack-chain device inventory where the Live API exposes chains",
     "Discovery intent normalization before Browser/web search",
     "Rollback failure stops without blind native Undo",
-    "Finish view refuses to claim bounce readiness before audio preflight exists"
+    "Finish view refuses to claim bounce readiness before audio preflight exists",
+    "Deterministic offline audio measurement, cautious diagnosis, preview-only gain correction, plugin metadata isolation, and cross-platform state paths are fixture-validated; these do not prove realtime, listening, DAW, or commercial-plugin acceptance"
   ],
   "next_layers": [
     "Complete the Gate 1 disposable real-Live acceptance checklist and record the evidence; implementation hardening is complete but SONG-READY remains unproven until this succeeds.",
@@ -223,7 +224,8 @@
     "DISCOVER Try in Song with provenance plus plugin sandbox/mapping/Simplify 2.0",
     "Session Debrief, evidence-based LEARN and later A&R intelligence",
     "Voice Lab/guide singer later, using only the user's own or explicitly authorized voice profiles",
-    "Optional Extensions SDK adapter later without changing coproducer logic"
+    "Optional Extensions SDK adapter later without changing coproducer logic",
+    "Native plugin hosting/rendering, certified loudness and true-peak, realtime ARK backends, and listening acceptance require native SDK/toolchain or real-system evidence"
   ],
   "non_goals": [
     "Do not maximize raw Ableton command count as a product goal.",

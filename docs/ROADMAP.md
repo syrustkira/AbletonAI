@@ -168,3 +168,11 @@ A disposable Set must prove:
 - [x] macOS Info.plist DAW metadata backend, multi-install discovery, and non-terminating RUNNING / NOT_RUNNING / UNKNOWN process detector.
 - [x] External self-update helper contract, startup health model, disposable Ableton checklist, and per-capability acceptance evidence store.
 - [ ] Ingest an approved macOS CPython build input, build on real macOS, execute real DAW discovery/process checks, sign, notarize, staple, and complete disposable real-Ableton acceptance.
+
+## Cross-platform audio and plugin closure
+
+- [x] Platform-owned mutable paths distinguish macOS Application Support, Windows roaming/local AppData, and Linux XDG data/cache/state roots.
+- [x] Deterministic offline analysis measures levels, DC, crest, spectral bands, dynamics, stereo/mono risk, and pairwise masking, with measurement separated from diagnosis and approval-required corrective previews.
+- [x] ARK graph routes fail closed on implicit feedback cycles and report modeled latency without claiming measured realtime performance.
+- [x] Metadata-only VST3/AU/CLAP/AAX discovery runs outside Core and plugin quarantine/semantic evidence is version scoped.
+- [ ] Native plugin instantiation/rendering, certified BS.1770 loudness/true peak, realtime ARK backends, commercial-plugin characterization, listening acceptance, and real-platform packaging remain external/native acceptance work.

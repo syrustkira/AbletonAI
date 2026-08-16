@@ -19,7 +19,20 @@ class AudioGraph:
   if a.direction not in {"SOURCE","BOTH"} or b.direction not in {"SINK","BOTH"}:raise ValueError("Invalid direction")
   if a.format!=b.format:raise ValueError("Format conversion must be explicit")
   if r.queue_capacity<1 or r.queue_capacity>8192:raise ValueError("Queue must be bounded")
+  edges={(route.source,route.sink) for route in self.routes.values() if route.enabled};edges.add((r.source,r.sink))
+  stack=[r.sink];seen=set()
+  while stack:
+   node=stack.pop()
+   if node==r.source:raise ValueError("Audio feedback cycle requires an explicit supported feedback processor")
+   if node in seen:continue
+   seen.add(node);stack.extend(sink for source,sink in edges if source==node)
   self.routes[r.id]=r
+ def latency(self,rid,buffer_frames=0,plugin_frames=0,device_frames=0,bridge_frames=0,process_tap_frames=0):
+  if rid not in self.routes:raise LookupError(rid)
+  rate=self.nodes[self.routes[rid].source].format.sample_rate
+  parts={"buffer_frames":buffer_frames,"plugin_frames":plugin_frames,"device_frames":device_frames,"bridge_frames":bridge_frames,"process_tap_frames":process_tap_frames}
+  if any(not isinstance(v,int) or v<0 for v in parts.values()):raise ValueError("Latency evidence must be non-negative integer frames")
+  total=sum(parts.values());return {**parts,"total_frames":total,"total_ms":total*1000/rate,"measured":False}
  def realtime_contract(self,rid):
   if rid not in self.routes:raise LookupError(rid)
   return {"no_ai":True,"no_db":True,"no_network":True,"no_sync":True,"no_blocking_logging":True,"bounded_queue":True}
