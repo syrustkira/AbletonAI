@@ -5,6 +5,10 @@ from n0te_media import *
 class Safe:
  def __init__(self,on=False):self.on=on
  def status(self):return {"safe":self.on}
+class FailingStreamBackend:
+ def test(self,scene):return False
+ def start(self,scene):return False
+ def stop(self):return False
 class MediaTests(unittest.TestCase):
  def test_motion_is_untrusted_and_authority_targets_are_denied(self):
   m=MotionMapper();e=MotionEvent("clap",.9,{},time.time())
@@ -12,11 +16,17 @@ class MediaTests(unittest.TestCase):
   with self.assertRaises(PermissionError):m.map(e,GestureMapping("clap","PUBLISH"))
   self.assertIsNone(m.map(MotionEvent("clap",.2,{},0),GestureMapping("clap","MARK")))
  def test_stream_test_is_local_and_live_requires_user_not_reconnect(self):
-  b=MockStreamBackend();e=StreamEngine(b,Safe());self.assertEqual(e.test(StreamScene.PRODUCING).state,StreamState.TESTING);self.assertFalse(b.live)
+  b=MockStreamBackend();e=StreamEngine(b,Safe());self.assertEqual(e.test(StreamScene.PRODUCING).state,StreamState.READY);self.assertFalse(b.live)
   for authority in ("ai","community","gesture"):
    with self.assertRaises(PermissionError):e.go_live(StreamScene.PRODUCING,authority=authority,explicit=True)
   with self.assertRaises(PermissionError):e.go_live(StreamScene.PRODUCING,authority="user",explicit=True,reconnect=True)
   self.assertEqual(e.go_live(StreamScene.PERFORMANCE,authority="user",explicit=True).state,StreamState.LIVE);e.enter_safe();self.assertFalse(b.live)
+ def test_stream_backend_failure_never_promotes_live_or_public_authority(self):
+  e=StreamEngine(FailingStreamBackend(),Safe())
+  with self.assertRaises(RuntimeError):e.test(StreamScene.PRODUCING)
+  self.assertEqual(e.session.state,StreamState.FAILED);self.assertFalse(e.session.public_authorized)
+  with self.assertRaises(RuntimeError):e.go_live(StreamScene.PERFORMANCE,authority="user",explicit=True)
+  self.assertEqual(e.session.state,StreamState.FAILED);self.assertFalse(e.session.public_authorized)
  def test_publication_invalidates_after_revision_and_safe_denies(self):
   r=PublicationRecord("p","project",1,"mock");e=PublicationEngine(Safe());e.approve(r,authority="user",revision=1)
   with self.assertRaises(PermissionError):e.publish(r,MockSocialAdapter(),current_revision=2)
