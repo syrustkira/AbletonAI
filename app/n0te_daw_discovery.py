@@ -45,6 +45,8 @@ class AdapterInstallation:
     repair_available: bool = False
     update_available: bool = False
     capability_counts: dict[str, int] = field(default_factory=dict)
+    evidence_verified: bool = False
+    evidence_source: str = ""
 
 
 @dataclass
@@ -68,6 +70,8 @@ class DawInstallationDescriptor:
     repair_available: bool
     update_available: bool
     capability_counts: dict[str, int] = field(default_factory=dict)
+    adapter_evidence_verified: bool = False
+    adapter_evidence_source: str = ""
 
     def status(self):
         value = asdict(self)
@@ -116,4 +120,25 @@ class DawDiscoveryService:
     def _descriptor(self, definition, path, version, installed):
         adapter=self.adapters.get(definition.adapter_component_id, AdapterInstallation(definition.adapter_component_id))
         identity=hashlib.sha256(f"{definition.family.value}|{path or ''}|{version}".encode()).hexdigest()[:20]
-        return DawInstallationDescriptor(identity,definition.family,definition.display_name,installed,version,str(path or ""),self.platform,self.architecture,definition.adapter_available,adapter.installed,adapter.version,definition.implementation_maturity,definition.target_maturity,adapter.aggregate_health,adapter.connection_state,definition.adapter_available and not adapter.installed,adapter.repair_available,adapter.update_available,dict(adapter.capability_counts))
+        evidence_verified=bool(adapter.evidence_verified)
+        adapter_installed=bool(adapter.installed and evidence_verified)
+        if evidence_verified:
+            aggregate_health=adapter.aggregate_health
+            connection_state=adapter.connection_state
+            capability_counts=dict(adapter.capability_counts)
+        elif adapter.installed:
+            aggregate_health=ComponentState.UNAVAILABLE
+            connection_state=ComponentState.UNAVAILABLE
+            capability_counts={}
+        else:
+            aggregate_health=ComponentState.OFF
+            connection_state=ComponentState.OFF
+            capability_counts={}
+        install_available=bool(definition.adapter_available and not adapter.installed)
+        repair_available=bool(adapter.repair_available or (adapter.installed and not evidence_verified))
+        return DawInstallationDescriptor(
+            identity,definition.family,definition.display_name,installed,version,str(path or ""),self.platform,self.architecture,
+            definition.adapter_available,adapter_installed,adapter.version,definition.implementation_maturity,definition.target_maturity,
+            aggregate_health,connection_state,install_available,repair_available,adapter.update_available,capability_counts,
+            evidence_verified,adapter.evidence_source if evidence_verified else ""
+        )
