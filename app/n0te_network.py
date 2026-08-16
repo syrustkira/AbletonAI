@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import ipaddress
+import json
 import os
+from pathlib import Path
 import urllib.parse
 
 
@@ -34,13 +36,34 @@ class NetworkPolicy:
         except ValueError:
             return cls(NetworkMode.OFFLINE)
 
+    @staticmethod
+    def _provider_route_override() -> str:
+        routed = str(os.environ.get(NetworkPolicy.ROUTED_PROVIDER_BASE_ENV) or "").strip()
+        if routed:
+            return routed
+        state = Path(os.environ.get("N0TE_STATE_DIR") or (Path.home() / ".n0te-ableton-ai"))
+        try:
+            config = json.loads((state / "config.json").read_text(encoding="utf-8"))
+            if not isinstance(config, dict):
+                return ""
+        except (OSError, json.JSONDecodeError):
+            return ""
+        provider = str(config.get("ai_provider") or "off").strip().lower()
+        if provider == "ollama":
+            return "http://127.0.0.1:11434/v1"
+        if provider == "gemini":
+            return "https://generativelanguage.googleapis.com/v1beta/openai"
+        if provider == "custom":
+            return str(config.get("ai_base_url") or "").strip()
+        return ""
+
     def decide(self, url: str, *, collaboration: bool = False) -> NetworkDecision:
         parsed = urllib.parse.urlsplit(str(url or ""))
         host = (parsed.hostname or "").lower()
         # Legacy OpenAI-shaped requests may be routed by the provider switchboard.
         # Evaluate policy against the actual configured provider destination.
         if host == "api.openai.com":
-            routed = str(os.environ.get(self.ROUTED_PROVIDER_BASE_ENV) or "").strip()
+            routed = self._provider_route_override()
             if routed:
                 candidate = urllib.parse.urlsplit(routed)
                 if candidate.scheme in {"http", "https"} and candidate.hostname:
