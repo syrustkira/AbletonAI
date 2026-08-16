@@ -18,6 +18,10 @@ class AnalysisKey:
   return cls(song_id,workspace_id,buffer.source,source_hash,buffer.range_seconds,algorithm_version,json.dumps(settings or {},sort_keys=True,separators=(",",":")))
 
 
+def _canonical_json_value(value):
+ return json.loads(json.dumps(value,sort_keys=True,separators=(",",":")))
+
+
 class AnalysisHistory:
  def __init__(self,path):self.path=Path(path)
  def _load(self):
@@ -32,7 +36,7 @@ class AnalysisHistory:
   item={"key":asdict(key),"song_id":song_id,"workspace_id":workspace_id,"source":buffer.source,"source_sha256":key.source_sha256,"range":buffer.range_seconds,"algorithm_version":report["algorithm_version"],"settings":settings or {},"time":time.time(),"report":report}
   current["analyses"].append(item);atomic_write_json(self.path,current);return item
  def current_for(self,key:AnalysisKey):
-  matches=[item for item in self._load()["analyses"] if item.get("key")==asdict(key)]
+  target=_canonical_json_value(asdict(key));matches=[item for item in self._load()["analyses"] if _canonical_json_value(item.get("key"))==target]
   return matches[-1] if matches else None
 
 
