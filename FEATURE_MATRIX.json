@@ -361,6 +361,42 @@
       "ableton": "not host-specific",
       "n0te_role": "deterministic fail-closed build manifest; redistributable runtime payload must be supplied by native release build",
       "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "macOS application bundle builder",
+      "ableton": "bundles adapter doctor and installer tool without claiming host acceptance",
+      "n0te_role": "deterministic Info.plist, private-runtime layout, Finder entrypoint, classification, hashes and DMG staging",
+      "status": "implemented"
+    },
+    {
+      "feature": "macOS private runtime consumer build",
+      "ableton": "not host-specific",
+      "n0te_role": "strict runtime ingestion exists; approved target CPython binary is an external build input",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "macOS metadata DAW discovery",
+      "ableton": "reads bundle identifier and version from Info.plist fixtures",
+      "n0te_role": "shared Detect DAWs backend with multi-version metadata and safe process-state abstraction",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "macOS single instance and product paths",
+      "ableton": "preserves workspace and adapter state",
+      "n0te_role": "non-destructive lock plus Application Support, Logs, Caches, Recovery, Updates and Rollback separation",
+      "status": "implemented"
+    },
+    {
+      "feature": "macOS self-update handoff",
+      "ableton": "host-close deferral remains capability/component scoped",
+      "n0te_role": "external helper contract verifies staged app, waits without killing, replaces, relaunches or rolls back",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Real Ableton capability acceptance",
+      "ableton": "disposable Set checklist and per-capability evidence store prepared",
+      "n0te_role": "real host execution remains required before VERIFIED or Song-Ready claims",
+      "status": "external_acceptance_pending"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

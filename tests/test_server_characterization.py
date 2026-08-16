@@ -36,7 +36,9 @@ class ServerRouteCharacterizationTests(unittest.TestCase):
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         try:
-            conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port, timeout=3)
+            # Coverage tracing and loaded macOS fixture modules can make the first
+            # in-process server request slower without changing its contract.
+            conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port, timeout=10)
             conn.putrequest(method, path, skip_host=True)
             request_headers = dict(headers or {})
             conn.putheader("Host", request_headers.pop("Host", "127.0.0.1:8766"))

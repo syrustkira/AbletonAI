@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **196 PASS**, including shared multi-DAW discovery, skippable first-run, component/capability-aware updates, offline packages, signature/hash checks, rollback, and private-runtime/license validation
+- unit/regression/lifecycle tests: **204 PASS**, including macOS bundle layout, private-runtime ingestion, product paths, single instance, Info.plist DAW discovery, process detection, update handoff, DMG staging, and acceptance evidence
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Reproducible coverage: **PASS**; real-Live acceptance remains mandatory

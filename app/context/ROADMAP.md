@@ -160,3 +160,11 @@ A disposable Set must prove:
 - [x] Component-aware updater supports stable/opt-in channels, NetworkPolicy pause, signed manifest and payload verification, minimal plans, host-close deferral, rollback, and offline `.n0teupdate` import.
 - [x] Adapter updates report fixed, revalidation-required, and unchanged capabilities without suppressing healthy paths.
 - [ ] Provision production release signing keys, private runtime payloads, native installer execution, and real-host compatibility evidence during external release acceptance.
+
+## macOS consumer build preparation
+
+- [x] Deterministic unsigned `N0TE Development.app` layout, configurable bundle identity, Info.plist, internal launcher, bundle hashes, notices, and DMG input staging.
+- [x] Finder entrypoint, single-instance lock, first-run routing, platform-owned user data/log/cache/recovery/update paths, and non-destructive legacy-state copy.
+- [x] macOS Info.plist DAW metadata backend, multi-install discovery, and non-terminating RUNNING / NOT_RUNNING / UNKNOWN process detector.
+- [x] External self-update helper contract, startup health model, disposable Ableton checklist, and per-capability acceptance evidence store.
+- [ ] Ingest an approved macOS CPython build input, build on real macOS, execute real DAW discovery/process checks, sign, notarize, staple, and complete disposable real-Ableton acceptance.

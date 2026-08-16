@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-STATE = Path.home() / ".n0te-ableton-ai"
+STATE = Path(os.environ.get("N0TE_STATE_DIR") or (Path.home() / ".n0te-ableton-ai"))
 STATE.mkdir(parents=True, exist_ok=True)
 STATIC = HERE / "static"
 sys.path.insert(0, str(HERE))
@@ -48,6 +48,7 @@ from n0te_safety import SafetyController
 from n0te_services import CreatorService, DawManagementService
 from n0te_daw_discovery import AdapterInstallation, DawDiscoveryService
 from n0te_capabilities import ComponentState
+from n0te_macos import MacOSApplicationDiscovery
 from n0te_media import MockStreamBackend
 
 APP_VERSION = "1.2.4"
@@ -59,7 +60,8 @@ SECRET_PATH = STATE / "secrets.json"
 
 _diagnostic_log = logging.getLogger("n0te.diagnostics")
 if not _diagnostic_log.handlers:
-    handler = RotatingFileHandler(STATE / "diagnostics.log", maxBytes=512_000, backupCount=3, encoding="utf-8")
+    log_dir = Path(os.environ.get("N0TE_LOG_DIR") or STATE);log_dir.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(log_dir / "diagnostics.log", maxBytes=512_000, backupCount=3, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     _diagnostic_log.addHandler(handler)
     _diagnostic_log.setLevel(logging.INFO)
@@ -71,7 +73,8 @@ projects = ProjectStore(STATE)
 intent_router = IntentRouter()
 safety = SafetyController(STATE)
 creator_service = CreatorService(STATE, safety, MockStreamBackend())
-daw_service = DawManagementService(DawDiscoveryService(adapters={"ABLETON_ADAPTER": AdapterInstallation("ABLETON_ADAPTER", True, APP_VERSION, ComponentState.READY, ComponentState.READY, True, False)}), STATE / "first_run.json")
+_mac_metadata = MacOSApplicationDiscovery() if sys.platform == "darwin" else None
+daw_service = DawManagementService(DawDiscoveryService(adapters={"ABLETON_ADAPTER": AdapterInstallation("ABLETON_ADAPTER", True, APP_VERSION, ComponentState.READY, ComponentState.READY, True, False)}, metadata_backend=_mac_metadata), STATE / "first_run.json")
 proposals: dict[str, dict[str, Any]] = {}
 simplify_proposals: dict[str, dict[str, Any]] = {}
 _snapshot_lock = threading.Lock()
@@ -1407,6 +1410,11 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True, "artist_world": creator_service.artist_update(self.body_json())})
             if self.path == "/api/setup":
                 return self.send_json({"ok": True, "setup": daw_service.first_run_advance(self.body_json()), "integrations": daw_service.integrations()})
+            if self.path == "/api/daws/ableton":
+                data=self.body_json();operation=str(data.get("operation") or "verify")
+                evidence=remote_script_doctor(STATE)
+                if operation in {"verify","diagnostics"}:return self.send_json({"ok":True,"operation":operation,"doctor":evidence,"deep_acceptance":False})
+                return self.send_json({"ok":False,"error":"Ableton integration install/repair requires a verified bundled adapter payload in this development build.","doctor":evidence},503)
             if self.path == "/api/creator/projects":
                 data=self.body_json(); return self.send_json({"ok":True,"project":creator_service.project_create(str(data.get("song_id") or ""),str(data.get("title") or "Untitled"))})
             if self.path == "/api/creator/recipe":
@@ -1627,7 +1635,8 @@ def main() -> None:
     print(f"N0TE Ableton AI {APP_VERSION}")
     print(f"UI: http://{HOST}:{PORT}")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    threading.Timer(0.7, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
+    first_run = not (STATE / "first_run.json").is_file()
+    threading.Timer(0.7, lambda: webbrowser.open(f"http://{HOST}:{PORT}/?first_run=1" if first_run else f"http://{HOST}:{PORT}")).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -78,12 +78,13 @@ class DawInstallationDescriptor:
 
 class DawDiscoveryService:
     """Single detector shared by setup, runtime, settings, diagnostics and updater."""
-    def __init__(self, search_roots: Iterable[Path] | None = None, adapters: dict[str, AdapterInstallation] | None = None, *, platform_name: str | None = None, architecture: str | None = None, definitions=OFFICIAL_HOSTS):
+    def __init__(self, search_roots: Iterable[Path] | None = None, adapters: dict[str, AdapterInstallation] | None = None, *, platform_name: str | None = None, architecture: str | None = None, definitions=OFFICIAL_HOSTS, metadata_backend=None):
         self.platform = platform_name or host_platform.system().lower()
         self.architecture = architecture or host_platform.machine().lower()
         self.search_roots = tuple(Path(x) for x in (search_roots or self.default_roots(self.platform)))
         self.adapters = adapters or {}
         self.definitions = tuple(definitions)
+        self.metadata_backend = metadata_backend
 
     @staticmethod
     def default_roots(platform_name: str):
@@ -95,11 +96,13 @@ class DawDiscoveryService:
         found=[]
         for definition in self.definitions:
             matches=[]
+            if self.metadata_backend:
+                matches.extend((meta.path,meta.version) for family,meta in self.metadata_backend.applications() if family is definition.family)
             for root in self.search_roots:
                 if not root.is_dir(): continue
                 for path in sorted(root.iterdir(), key=lambda p: p.name.lower()):
                     version=self._match(definition, path.name)
-                    if version is not None: matches.append((path, version or "UNKNOWN"))
+                    if version is not None and all(existing[0] != path for existing in matches): matches.append((path, version or "UNKNOWN"))
             for path,version in matches: found.append(self._descriptor(definition,path,version,True))
             if include_missing and not matches: found.append(self._descriptor(definition,None,"",False))
         return found

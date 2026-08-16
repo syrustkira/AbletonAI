@@ -12,11 +12,11 @@
     },
     {
       "name": "Python private runtime",
-      "version": "build-selected",
+      "version": "EXTERNAL_BUILD_INPUT",
       "license": "Python Software Foundation License",
-      "source_project": "https://www.python.org/",
-      "redistribution_status": "payload_not_present",
-      "notice_location": "installer build must supply and verify the matching PSF notice"
+      "source_project": "https://www.python.org/downloads/macos/",
+      "redistribution_status": "EXTERNAL_ACCEPTANCE_PENDING",
+      "notice_location": "EXTERNAL_BUILD_INPUT/PSF-LICENSE"
     }
   ]
 }

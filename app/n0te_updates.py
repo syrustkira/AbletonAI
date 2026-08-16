@@ -109,6 +109,13 @@ class UpdateEngine:
  def status(self):return {"state":self.state.value,"channel":self.settings.channel.value,"automatic_checking":self.settings.automatic_checking,"automatic_safe_install":self.settings.automatic_safe_install,"last_successful_check":self.last_check,"network_permission":self.policy.status(),"available_release":self.manifest.release_version if self.manifest else "","pending_components":[x.component_id for x in self.plan],"pending_host_close":self.state is UpdateState.PENDING_HOST_CLOSE,"pending_restart":self.state is UpdateState.PENDING_RESTART,"rollback_available":(self.state_dir/"rollback.json").exists(),"signature_status":"VERIFIED" if self.manifest else "NOT_CHECKED","song_id":self.song_id}
 def _manifest_from_dict(raw):
  components=[UpdateComponent(**x) for x in raw["components"]];return ReleaseManifest(**{**raw,"channel":UpdateChannel(raw["channel"]),"components":components})
+def prepare_macos_handoff(path:Path,current_app:Path,staged_app:Path,backup_app:Path,pid:int,timeout=30):
+ current_app,staged_app,backup_app=map(lambda x:Path(x).resolve(),(current_app,staged_app,backup_app))
+ if current_app==staged_app or any(not x.name.endswith('.app') for x in (current_app,staged_app,backup_app)):raise ValueError("Safe .app paths required")
+ hashes={str(x.relative_to(staged_app)):hashlib.sha256(x.read_bytes()).hexdigest() for x in sorted(staged_app.rglob('*')) if x.is_file()}
+ if not hashes:raise ValueError("Staged application is empty")
+ handoff={"schema":1,"current_app":str(current_app),"staged_app":str(staged_app),"backup_app":str(backup_app),"pid":int(pid),"timeout":float(timeout),"bundle_hashes":hashes,"creative_state_untouched":True}
+ atomic_write_json(Path(path),handoff);return handoff
 def _version(value):
  parts=[]
  for item in str(value).split("."):
