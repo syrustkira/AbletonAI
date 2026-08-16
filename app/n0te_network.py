@@ -23,12 +23,12 @@ class NetworkDecision:
 class NetworkPolicy:
     """Central, fail-closed policy for N0TE-owned outbound connections."""
 
-    mode: NetworkMode = NetworkMode.FULL
+    mode: NetworkMode = NetworkMode.OFFLINE
 
     @classmethod
     def from_value(cls, value: object) -> "NetworkPolicy":
         try:
-            return cls(NetworkMode(str(value or "full").strip().lower()))
+            return cls(NetworkMode(str(value or "offline").strip().lower()))
         except ValueError:
             return cls(NetworkMode.OFFLINE)
 
