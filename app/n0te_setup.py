@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 import json
+import time
 
 from n0te_state import atomic_write_json
 
@@ -38,7 +39,7 @@ class FirstRunState:
 
 
 class FirstRunService:
-    """Persistent first-run flow with fail-closed defaults for a fresh installation."""
+    """Persistent first-run flow with fail-closed runtime defaults."""
 
     SAFE_CONFIG_DEFAULTS = {
         "ai_provider": "off",
@@ -51,6 +52,7 @@ class FirstRunService:
     def __init__(self, path: Path, discovery):
         self.path = Path(path)
         self.config_path = self.path.with_name("config.json")
+        self.recovery_dir = self.path.parent / "Recovery"
         self.discovery = discovery
         self.state = FirstRunState()
         self._ensure_safe_runtime_defaults()
@@ -64,11 +66,37 @@ class FirstRunService:
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 self.state = FirstRunState()
 
+    def _preserve_corrupt_config(self) -> str:
+        try:
+            if not self.config_path.is_file():
+                return ""
+            self.recovery_dir.mkdir(parents=True, exist_ok=True)
+            target = self.recovery_dir / f"config-corrupt-{int(time.time() * 1000)}.json"
+            target.write_bytes(self.config_path.read_bytes())
+            return str(target)
+        except OSError:
+            return ""
+
     def _ensure_safe_runtime_defaults(self) -> None:
-        """Seed only a brand-new runtime config; never overwrite an existing user's choices."""
-        if self.config_path.exists():
+        """Preserve explicit choices, fill missing safety keys, and fail closed on corrupt config."""
+        if not self.config_path.exists():
+            atomic_write_json(self.config_path, dict(self.SAFE_CONFIG_DEFAULTS))
             return
-        atomic_write_json(self.config_path, dict(self.SAFE_CONFIG_DEFAULTS))
+        try:
+            current = json.loads(self.config_path.read_text(encoding="utf-8"))
+            if not isinstance(current, dict):
+                raise ValueError("config must be a JSON object")
+        except (OSError, ValueError, json.JSONDecodeError):
+            self._preserve_corrupt_config()
+            atomic_write_json(self.config_path, dict(self.SAFE_CONFIG_DEFAULTS))
+            return
+        changed = False
+        for key, value in self.SAFE_CONFIG_DEFAULTS.items():
+            if key not in current:
+                current[key] = value
+                changed = True
+        if changed:
+            atomic_write_json(self.config_path, current)
 
     def _sync_fail_closed_choices(self) -> None:
         """Persist explicit OFF/OFFLINE choices into the shared runtime config."""
@@ -78,6 +106,8 @@ class FirstRunService:
                 current = {}
         except (OSError, json.JSONDecodeError):
             current = {}
+        for key, value in self.SAFE_CONFIG_DEFAULTS.items():
+            current.setdefault(key, value)
         if str(self.state.ai_mode).upper() == "OFF":
             current["ai_provider"] = "off"
         current["network_mode"] = str(self.state.network_mode or "OFFLINE").lower()
