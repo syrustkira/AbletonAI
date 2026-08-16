@@ -8,9 +8,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+from n0te_network import NetworkPolicy
 
 
-def _http_json(url: str, headers: dict[str, str] | None = None, timeout: float = 12.0) -> dict[str, Any]:
+def _http_json(url: str, headers: dict[str, str] | None = None, timeout: float = 12.0,
+               network_policy: NetworkPolicy | None = None) -> dict[str, Any]:
+    (network_policy or NetworkPolicy()).require(url)
     req = urllib.request.Request(url, headers={"User-Agent": "N0TE-Ableton-AI/1.2", **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -109,14 +112,15 @@ def search_live_browser(bridge, query: str, limit: int = 24) -> dict[str, Any]:
         return {"results": [], "roots": roots, "truncated": False, "errors": errors}
 
 
-def search_openverse(query: str, limit: int = 12, token: str = "", license_filter: str = "") -> dict[str, Any]:
+def search_openverse(query: str, limit: int = 12, token: str = "", license_filter: str = "",
+                     network_policy: NetworkPolicy | None = None) -> dict[str, Any]:
     params = {"q": query, "page_size": str(max(1, min(limit, 20))), "mature": "false"}
     if license_filter:
         params["license"] = license_filter
     url = "https://api.openverse.org/v1/audio/?" + urllib.parse.urlencode(params)
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
-        data = _http_json(url, headers=headers)
+        data = _http_json(url, headers=headers, network_policy=network_policy)
     except Exception as exc:
         return {"results": [], "error": str(exc), "source": "openverse"}
     rows = []
@@ -152,7 +156,8 @@ def search_openverse(query: str, limit: int = 12, token: str = "", license_filte
     return {"results": rows, "source": "openverse", "error": ""}
 
 
-def search_freesound(query: str, api_key: str, limit: int = 12) -> dict[str, Any]:
+def search_freesound(query: str, api_key: str, limit: int = 12,
+                     network_policy: NetworkPolicy | None = None) -> dict[str, Any]:
     if not api_key:
         return {"results": [], "source": "freesound", "error": "Freesound API key not configured"}
     fields = "id,name,tags,username,license,previews,duration,type,samplerate,url,download"
@@ -164,7 +169,7 @@ def search_freesound(query: str, api_key: str, limit: int = 12) -> dict[str, Any
     # Current APIv2 search endpoint; the older /search/text endpoint was deprecated in 2025.
     url = "https://freesound.org/apiv2/search/?" + urllib.parse.urlencode(params)
     try:
-        data = _http_json(url, headers={"Authorization": f"Token {api_key}"})
+        data = _http_json(url, headers={"Authorization": f"Token {api_key}"}, network_policy=network_policy)
     except Exception as exc:
         return {"results": [], "source": "freesound", "error": str(exc)}
     rows = []
@@ -268,7 +273,7 @@ def _filter_negative(rows: list[dict[str, Any]], negative_terms: list[str]) -> l
 
 def discover(query: str, bridge, library, snapshot: dict[str, Any], *, include_web: bool = True,
              openverse_token: str = "", freesound_key: str = "", web_threshold: int = 6,
-             license_filter: str = "") -> dict[str, Any]:
+             license_filter: str = "", network_policy: NetworkPolicy | None = None) -> dict[str, Any]:
     intent = extract_discovery_intent(query)
     normalized = str(intent.get("query") or "").strip()
     negatives = [str(x) for x in intent.get("negative_terms") or []]
@@ -300,9 +305,10 @@ def discover(query: str, bridge, library, snapshot: dict[str, Any], *, include_w
     broad = []
     web_requested = bool(include_web or intent.get("include_web_hint"))
     if web_requested and local_count < web_threshold:
-        openverse = search_openverse(normalized, limit=12, token=openverse_token, license_filter=license_filter)
+        openverse = search_openverse(normalized, limit=12, token=openverse_token, license_filter=license_filter,
+                                     network_policy=network_policy)
         openverse["results"] = _filter_negative(openverse.get("results") or [], negatives)
-        freesound = search_freesound(normalized, freesound_key, limit=12)
+        freesound = search_freesound(normalized, freesound_key, limit=12, network_policy=network_policy)
         freesound["results"] = _filter_negative(freesound.get("results") or [], negatives)
         if not openverse.get("results") and not freesound.get("results"):
             broad = general_web_search_urls(normalized)

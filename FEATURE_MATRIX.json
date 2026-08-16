@@ -133,6 +133,330 @@
       "ableton": "official Extensions path on supported beta/setup",
       "n0te_role": "future LiveBridge adapter only; not required",
       "status": "future_transport"
+    },
+    {
+      "feature": "AI OFF deterministic foundation",
+      "ableton": "not applicable",
+      "n0te_role": "explicit credential-free OFF state; deterministic server functions remain available",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Central NetworkPolicy",
+      "ableton": "not applicable",
+      "n0te_role": "fail-closed outbound policy; AI provider path migrated, remaining network callers pending",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Capability Engine",
+      "ableton": "Live remains the first deep integration",
+      "n0te_role": "typed/versioned runtime registry with explicit privacy, cost, and mutation escalation",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Deterministic AI-OFF intent and Job Engine",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Producer-language routing for bounded existing operations; mutations remain proposal/approval gated",
+      "status": "implemented"
+    },
+    {
+      "feature": "Guided Manual execution plans",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "First-class safe outcome for unsupported or ambiguous operations",
+      "status": "implemented"
+    },
+    {
+      "feature": "Ranked capability resolution",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Explicit current-project/native/owned/orchestration/external/manual hierarchy with privacy/cost/authority filters",
+      "status": "implemented"
+    },
+    {
+      "feature": "Evidence-backed tool profiles",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Durable local characterization profiles; unknown mappings fail to Guided Manual",
+      "status": "implemented"
+    },
+    {
+      "feature": "Event Engine and N0TE MARK",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Durable bounded Song/workspace-attributed creative events and MARKs",
+      "status": "implemented"
+    },
+    {
+      "feature": "Private Notebook and Vault",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Durable local notes with explicit context opt-in and fail-closed Private Vault",
+      "status": "implemented"
+    },
+    {
+      "feature": "N0TE SAFE authority freeze",
+      "ableton": "not applicable or orchestrated native behavior",
+      "n0te_role": "Persistent mutation/remote authority revocation without automatic Undo",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Song and workspace identity model",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Durable non-destructive Song-above-workspace records with idempotent legacy mapping",
+      "status": "implemented"
+    },
+    {
+      "feature": "Universal Project Graph",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Validated host-neutral graph with retained host extensions",
+      "status": "implemented"
+    },
+    {
+      "feature": "Portability survival manifests",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Non-destructive export-candidate reports with preservation metrics",
+      "status": "implemented"
+    },
+    {
+      "feature": "Recovery circuit breaker",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Persistent bounded faults, reversible quarantine, crash capsule and safe-start plan",
+      "status": "implemented"
+    },
+    {
+      "feature": "Realtime Guardian policy",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Deterministic priority/profile scheduling policy; real audio acceptance pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Song Version Engine",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Immutable ancestry and explicit locked-version reopen intent",
+      "status": "implemented"
+    },
+    {
+      "feature": "Provider-neutral Sync Outbox",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Local revision-aware queue with no reconnect upload and Vault exclusion",
+      "status": "implemented"
+    },
+    {
+      "feature": "Knowledge lifecycle",
+      "ableton": "host workspace or not applicable",
+      "n0te_role": "Durable classified knowledge with protected deterministic pruning",
+      "status": "implemented"
+    },
+    {
+      "feature": "Observability Engine",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Truthful compact/detailed process and component health; unsupported external metrics explicitly absent",
+      "status": "implemented"
+    },
+    {
+      "feature": "Musical Panic portable core",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Generated MIDI state and confirmed-execution panic planning; host execution acceptance pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Artist World",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Atomic advisory identity/visual/sonic/voice/content guidance with explicit ignore modes",
+      "status": "implemented"
+    },
+    {
+      "feature": "Creator Engine local lifecycle",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Local content projects with fail-closed PUBLIC authority validation",
+      "status": "implemented"
+    },
+    {
+      "feature": "Deterministic content recipes",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "AI-OFF Song section/MARK timeline planning",
+      "status": "implemented"
+    },
+    {
+      "feature": "Quick Edit model",
+      "ableton": "orchestrated context or not applicable",
+      "n0te_role": "Production-aware EDL operations and aspect presets; renderer acceptance pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Camera and motion core",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Portable untrusted motion mapping with safe target allowlist",
+      "status": "implemented"
+    },
+    {
+      "feature": "Stream Engine",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Mock-backed TEST/LIVE state and explicit GO LIVE authority; real backend pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Social publication lifecycle",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Revision-bound explicit user approval and receipt model",
+      "status": "implemented"
+    },
+    {
+      "feature": "Portable ARK graph",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Validated bounded realtime routing metadata; native backends pending",
+      "status": "implemented"
+    },
+    {
+      "feature": "Plugin Core IPC",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Protocol and feature negotiation preserving Song binding",
+      "status": "implemented"
+    },
+    {
+      "feature": "DAW Adapter contract",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Gate-1-authorized host-neutral contract; only Ableton real",
+      "status": "interface_only"
+    },
+    {
+      "feature": "Packaging planner",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Dependency, platform, rollback, in-use and data-preservation planning",
+      "status": "implemented"
+    },
+    {
+      "feature": "Chaos harness",
+      "ableton": "replaceable adapter or not applicable",
+      "n0te_role": "Cross-component authority/privacy/resilience regressions",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Multi-DAW adapter maturity",
+      "ableton": "first validated DEEP adapter",
+      "n0te_role": "all officially supported DAWs target DEEP; read/observe may use assumed compatibility while automatic mutation requires verified compatibility plus Gate 1",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Generic DAW discovery and first-run management",
+      "ableton": "one recognized host family; multiple versions retained",
+      "n0te_role": "shared Detect DAWs service for setup/runtime/settings/diagnostics/updater; unsupported detection is healthy",
+      "status": "implemented"
+    },
+    {
+      "feature": "Component-aware Update Engine",
+      "ableton": "adapter updates defer while host is open",
+      "n0te_role": "signed manifests, minimal component plans, NetworkPolicy pause, staging, rollback, and policy/Song preservation",
+      "status": "implemented"
+    },
+    {
+      "feature": "Offline update packages",
+      "ableton": "adapter payload may be included when genuinely built",
+      "n0te_role": "signed .n0teupdate import verifies manifest and payload without network",
+      "status": "implemented"
+    },
+    {
+      "feature": "Production update signing and native installer integration",
+      "ableton": "real adapter/native payload acceptance required",
+      "n0te_role": "signature verifier boundary exists; release-key provisioning and native install execution remain external",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "Private Python runtime payload",
+      "ableton": "not host-specific",
+      "n0te_role": "deterministic fail-closed build manifest; redistributable runtime payload must be supplied by native release build",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "macOS application bundle builder",
+      "ableton": "bundles adapter doctor and installer tool without claiming host acceptance",
+      "n0te_role": "deterministic Info.plist, private-runtime layout, Finder entrypoint, classification, hashes and DMG staging",
+      "status": "implemented"
+    },
+    {
+      "feature": "macOS private runtime consumer build",
+      "ableton": "not host-specific",
+      "n0te_role": "strict runtime ingestion exists; approved target CPython binary is an external build input",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "macOS metadata DAW discovery",
+      "ableton": "reads bundle identifier and version from Info.plist fixtures",
+      "n0te_role": "shared Detect DAWs backend with multi-version metadata and safe process-state abstraction",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "macOS single instance and product paths",
+      "ableton": "preserves workspace and adapter state",
+      "n0te_role": "non-destructive lock plus Application Support, Logs, Caches, Recovery, Updates and Rollback separation",
+      "status": "implemented"
+    },
+    {
+      "feature": "macOS self-update handoff",
+      "ableton": "host-close deferral remains capability/component scoped",
+      "n0te_role": "external helper contract verifies staged app, waits without killing, replaces, relaunches or rolls back",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Real Ableton capability acceptance",
+      "ableton": "disposable Set checklist and per-capability evidence store prepared",
+      "n0te_role": "real host execution remains required before VERIFIED or Song-Ready claims",
+      "status": "external_acceptance_pending"
+    },
+    {
+      "feature": "Deterministic offline Audio Intelligence",
+      "ableton": "Consumes explicit audio buffers/files; does not claim Live audio capture",
+      "n0te_role": "Standards-conscious gated loudness, multiformat decode, bounded streaming levels/true peak, frequency-dependent stereo, transient evidence, scoped history, professional rendering, and bounded numeric mastering candidates",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Cross-platform product data paths",
+      "ableton": "Host state remains separate from product state",
+      "n0te_role": "macOS Application Support, Windows roaming/local AppData, and Linux XDG data/cache/state separation",
+      "status": "implemented"
+    },
+    {
+      "feature": "Plugin discovery and isolation foundation",
+      "ableton": "Does not load or modify DAW plugins",
+      "n0te_role": "Metadata-only VST3/AU/CLAP/AAX discovery in an isolated subprocess, version-scoped quarantine, and evidence-bound semantic mappings; native hosting remains external",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "ARK feedback and latency safety",
+      "ableton": "Audio routes remain explicit and host-neutral",
+      "n0te_role": "Rejects implicit graph cycles, bounds queues, states realtime exclusions, and models evidenced frame latency without zero-latency claims",
+      "status": "implemented"
+    },
+    {
+      "feature": "Standards-conscious offline audio analysis",
+      "ableton": "Analyzes explicit WAV sources without claiming DAW capture",
+      "n0te_role": "PCM16/24/32 and float32 decode, K-weighted gated LUFS-I/M/S/LRA, interpolated true peak, radix-2 FFT/STFT, reference and technical diagnosis",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Offline N0TE DSP and mastering candidate",
+      "ableton": "Produces a separate preview/version and never mutates a Set",
+      "n0te_role": "Gain, polarity, stereo, delay, filters/EQ, compressor, gate, clipper, limiter, de-esser and transient processing with before/after evidence",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Native realtime-safe DSP and audio ring",
+      "ableton": "Host/plugin integration not claimed",
+      "n0te_role": "C11 DSP kernels and bounded lock-free SPSC transport compile and pass sanitizer/native tests on Linux",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Linux consumer product",
+      "ableton": "No unsupported DAW claim on Linux",
+      "n0te_role": "real desktop and /proc discovery plus deterministic private-runtime AppDir builder; runtime/AppImage tool remain external inputs",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Windows consumer product sources",
+      "ableton": "Registry fixtures recognize Ableton, FL Studio and Pro Tools without claiming real Windows acceptance",
+      "n0te_role": "registry/process backends, Windows mutex, private-runtime installer configuration and no-console product contract",
+      "status": "partially_implemented"
+    },
+    {
+      "feature": "Audio and Plugins product views",
+      "ableton": "Offline analysis and metadata discovery remain distinct from realtime/host execution",
+      "n0te_role": "local WAV analysis and isolated standard-location plugin scanning exposed through companion UI/API",
+      "status": "implemented"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",
@@ -142,11 +466,16 @@
     "n0te_additive": "N0TE adds a capability/workflow layer; may be partial/planned.",
     "hybrid": "Use native mechanisms plus N0TE context/reasoning.",
     "future_external": "Later external capability; not Song-Ready blocking.",
-    "future_transport": "Later transport option; not Song-Ready blocking."
+    "future_transport": "Later transport option; not Song-Ready blocking.",
+    "implemented": "Implemented and automatically validated; external acceptance may still be separately required.",
+    "partially_implemented": "A working tested subset exists, with explicitly documented integration work remaining.",
+    "interface_only": "Contracts/scaffolding exist, but no real integration is claimed.",
+    "external_acceptance_pending": "Implementation exists but requires real external system or hardware acceptance.",
+    "planned": "Not implemented."
   },
   "song_ready_status": {
-    "state": "implementation_complete_real_live_acceptance_pending",
-    "reason": "Gate 1 ownership, recovery, Apply revalidation, diagnostics, persistence/concurrency, API and CI controls are implemented and covered by automated regressions. SONG-READY remains pending the disposable real-Live checklist.",
+    "state": "gate1_implementation_complete_real_live_acceptance_pending",
+    "reason": "The Ableton Gate 1/Song-ready safety scope is implementation-complete under automated regression. The wider N0TE product remains partial, and real-Live acceptance is still required.",
     "blocking_items": [
       "user completion of the Gate 1 disposable real-Live acceptance checklist"
     ],

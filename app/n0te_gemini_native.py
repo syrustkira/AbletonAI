@@ -5,6 +5,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+from n0te_network import NetworkPolicy
 
 GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -146,6 +147,9 @@ def _response_text(raw: dict[str, Any]) -> str:
 
 def _send_native(provider_module: Any, key: str, model: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
     url = f"{GEMINI_API_ROOT}/models/{urllib.parse.quote(model, safe='-._')}:generateContent"
+    config_path = getattr(provider_module, "CONFIG_PATH", None)
+    config = provider_module._load_json(config_path) if config_path and hasattr(provider_module, "_load_json") else {}
+    NetworkPolicy.from_value(config.get("network_mode", "full")).require(url)
     req = urllib.request.Request(
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+CONTENTS="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+PYTHON="$CONTENTS/Frameworks/Python/bin/python3"
+if [ ! -x "$PYTHON" ]; then
+  /usr/bin/osascript -e 'display alert "N0TE Development Build" message "The private CPython runtime build input is missing. This staging artifact is not a consumer release." as critical' >/dev/null 2>&1 || true
+  exit 78
+fi
+export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1
+export N0TE_APP_BUNDLE="$CONTENTS/.."
+exec "$PYTHON" -I "$CONTENTS/Resources/app/n0te_app.py"

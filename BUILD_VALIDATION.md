@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **100 PASS** after canonical packaged-context drift protection
+- unit/regression/lifecycle tests: **245 PASS**, including atomic reconnect identity, fail-closed compatibility defaults, floating-point headroom, DSP transfer references, channel-layout-aware loudness, bounded streaming levels/true peak, scoped analysis history, professional rendering/dither, iterative mastering, and durable plugin identity/quarantine
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Reproducible coverage: **PASS**; real-Live acceptance remains mandatory
@@ -72,7 +72,7 @@
 - real third-party plugin parameter exposure
 - availability/quota of any selected cloud AI provider or user credential
 - quality/performance of a selected local Ollama model on the user's Mac
-- real audio analysis, because that N0TE layer is not implemented yet
+- real DAW audio capture, certified loudness/true-peak compliance, listening quality, and realtime performance; deterministic offline measurements are fixture-validated only
 
 ## Deliberately not claimed in 1.2.4
 
@@ -106,6 +106,6 @@ The real-Live acceptance pass additionally caught and corrected a Doctor-only fa
 
 The provider switchboard is transport-only. Gemini uses native structured output and now handles real-world malformed/incomplete candidates by isolating thought parts, checking finish metadata, discarding the bad candidate, and making at most one fresh schema-constrained retry. It never guess-repairs safety-critical JSON. This does not widen the Ableton action whitelist or bypass proposal validation, approval, mutation serialization, journaling, Set ownership, or N0TE Undo safety. Cloud-provider availability and local-model quality remain real-machine acceptance concerns.
 
-This is **implementation complete / real-Live acceptance pending**, not a SONG-READY claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
+The **Ableton Gate 1 safety scope is implementation complete / real-Live acceptance pending**. The wider N0TE product remains partially implemented; this is not a SONG-READY or whole-product-complete claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
 
 Reproducible dependency-free statement-coverage command: `bash scripts/coverage.sh`.

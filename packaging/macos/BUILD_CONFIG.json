@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "product_name": "N0TE",
+  "development_product_name": "N0TE Development",
+  "bundle_identifier": "app.n0te.N0TE",
+  "bundle_version": "1.2.4",
+  "minimum_macos": "12.0",
+  "private_runtime_executable": "Contents/Frameworks/Python/bin/python3",
+  "signed": false,
+  "notarized": false,
+  "development_build": true
+}

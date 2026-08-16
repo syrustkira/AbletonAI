@@ -210,20 +210,24 @@
     "Recursive Rack-chain device inventory where the Live API exposes chains",
     "Discovery intent normalization before Browser/web search",
     "Rollback failure stops without blind native Undo",
-    "Finish view refuses to claim bounce readiness before audio preflight exists"
+    "Finish view refuses to claim bounce readiness before audio preflight exists",
+    "Deterministic offline audio measurement, cautious diagnosis, preview-only gain correction, plugin metadata isolation, and cross-platform state paths are fixture-validated; these do not prove realtime, listening, DAW, or commercial-plugin acceptance",
+    "Offline multiformat audio analysis, gated K-weighted loudness, true peak, FFT/STFT, reference/stem comparison, N0TE DSP previews, explicit external rendering, Linux product discovery, and native C DSP/ring tests are implemented without promoting real DAW or listening acceptance"
   ],
   "next_layers": [
     "Complete the Gate 1 disposable real-Live acceptance checklist and record the evidence; implementation hardening is complete but SONG-READY remains unproven until this succeeds.",
     "Add characterization tests before decomposing overloaded server responsibilities.",
     "Context Engine: provenance, versioned ContextEnvelope, context diff, session distillation, sync packet and selective retrieval",
     "Read-only MCP adapter and secure ChatGPT context synchronization after Context Engine",
-    "AgentAudioTap capture hardening, deterministic audio metrics, Before/After, Plugin Delta, Reference Delta and Finish Dry Run",
     "Production Recipes, Signal Flow diagnostics, repair/portability workflows and simplification verification",
     "Music Map 2 with section/chord dependencies and safe duplicate/take-lane MIDI variation",
     "DISCOVER Try in Song with provenance plus plugin sandbox/mapping/Simplify 2.0",
     "Session Debrief, evidence-based LEARN and later A&R intelligence",
     "Voice Lab/guide singer later, using only the user's own or explicitly authorized voice profiles",
-    "Optional Extensions SDK adapter later without changing coproducer logic"
+    "Optional Extensions SDK adapter later without changing coproducer logic",
+    "Complete real AudioTap/Bridge capture acceptance; deterministic offline audio metrics, rendering and bounded mastering optimization are already implemented.",
+    "Ingest the legitimate official VST3 SDK, then build and prove the native host with a legal test module before commercial-plugin characterization.",
+    "Validate loudness against official conformance material and complete human listening/benchmark acceptance; numeric validation is not artistic acceptance."
   ],
   "non_goals": [
     "Do not maximize raw Ableton command count as a product goal.",
@@ -249,10 +253,10 @@
       "Do not claim CPU savings from plugin replacement without measurement evidence."
     ]
   },
-  "context_version": "1.2.4-gate1-implementation-complete-2",
+  "context_version": "1.2.4-gate1-scope-complete-product-partial-3",
   "song_ready_gate": {
-    "purpose": "Make the current coproducer safe/reliable enough to start a real new song before later feature expansion.",
-    "state": "implementation_complete_real_live_acceptance_pending",
+    "purpose": "Prove the existing Ableton Gate 1/Song-ready safety scope on a disposable real Live Set; this does not describe whole-product completion.",
+    "state": "gate1_implementation_complete_real_live_acceptance_pending",
     "blockers": [
       "user completion of the Gate 1 disposable real-Live acceptance checklist"
     ],

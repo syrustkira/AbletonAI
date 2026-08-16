@@ -57,7 +57,7 @@ This gate is the blocker before using N0TE mutations on a real new song.
 - [x] Consistent local Host/Origin policy.
 - [x] Proposal expiration/garbage collection.
 - [x] Redacted rotating diagnostic log.
-- [ ] Characterization tests before splitting overloaded server responsibilities.
+- [x] Characterization tests before splitting overloaded server responsibilities.
 
 ### Song-Ready acceptance
 
@@ -152,3 +152,48 @@ A disposable Set must prove:
 ## Permanent engineering rule
 
 **No new N0TE feature category unless a real music session exposes the need, or it fixes reliability/safety.**
+
+## Product distribution and host management
+
+- [x] Shared **Detect DAWs** service recognizes Ableton Live, Logic Pro, FL Studio, and Pro Tools, retains multiple installations, and keeps detection separate from adapter support and Song identity.
+- [x] First-run can finish healthily with no DAW, AI OFF, Network OFFLINE, no OBS, no camera, and no Local AI.
+- [x] Component-aware updater supports stable/opt-in channels, NetworkPolicy pause, signed manifest and payload verification, minimal plans, host-close deferral, rollback, and offline `.n0teupdate` import.
+- [x] Adapter updates report fixed, revalidation-required, and unchanged capabilities without suppressing healthy paths.
+- [ ] Provision production release signing keys, private runtime payloads, native installer execution, and real-host compatibility evidence during external release acceptance.
+
+## macOS consumer build preparation
+
+- [x] Deterministic unsigned `N0TE Development.app` layout, configurable bundle identity, Info.plist, internal launcher, bundle hashes, notices, and DMG input staging.
+- [x] Finder entrypoint, single-instance lock, first-run routing, platform-owned user data/log/cache/recovery/update paths, and non-destructive legacy-state copy.
+- [x] macOS Info.plist DAW metadata backend, multi-install discovery, and non-terminating RUNNING / NOT_RUNNING / UNKNOWN process detector.
+- [x] External self-update helper contract, startup health model, disposable Ableton checklist, and per-capability acceptance evidence store.
+- [ ] Ingest an approved macOS CPython build input, build on real macOS, execute real DAW discovery/process checks, sign, notarize, staple, and complete disposable real-Ableton acceptance.
+
+## Cross-platform audio and plugin closure
+
+- [x] Platform-owned mutable paths distinguish macOS Application Support, Windows roaming/local AppData, and Linux XDG data/cache/state roots.
+- [x] Deterministic offline analysis measures levels, DC, crest, spectral bands, dynamics, stereo/mono risk, and pairwise masking, with measurement separated from diagnosis and approval-required corrective previews.
+- [x] ARK graph routes fail closed on implicit feedback cycles and report modeled latency without claiming measured realtime performance.
+- [x] Metadata-only VST3/AU/CLAP/AAX discovery runs outside Core and plugin quarantine/semantic evidence is version scoped.
+- [ ] Native plugin instantiation/rendering, certified BS.1770 loudness/true peak, realtime ARK backends, commercial-plugin characterization, listening acceptance, and real-platform packaging remain external/native acceptance work.
+
+## Functional audio and native product pass
+
+- [x] Decode PCM 16/24/32 and IEEE float32 WAV with explicit format rejection and source hashes.
+- [x] Implement K-weighted, absolute/relative gated LUFS-I/M/S and LRA, configurable interpolated true peak, radix-2 FFT/STFT, reference and stem comparisons.
+- [x] Implement offline N0TE DSP, bounded mastering candidates, explicit external-render authority, non-overwriting Song-linked receipts, and analysis history invalidation by source hash.
+- [x] Compile and sanitizer-test native C11 DSP kernels and a bounded SPSC audio ring on Linux x86_64.
+- [x] Execute Linux `.desktop` and `/proc` discovery and validate a private-runtime AppDir builder; add Windows Registry/process/mutex/installer sources.
+- [x] Expose real offline Audio and isolated Plugins views; close the companion server's remaining direct runtime provider policy check.
+- [ ] Official VST3 SDK ingestion and native VST3/Bridge builds are blocked by absent SDK and denied official-repository access; commercial-plugin and real-host evidence require installations.
+- [ ] Certified loudness vectors, listening acceptance, PipeWire/JACK/ALSA runtime, real AppImage tooling, approved private runtime payloads, and target macOS/Windows builds remain external acceptance.
+
+## Post-merge audio correctness
+
+- [x] Plugin/Core reconnect rejection is atomic and cannot change Song/workspace identity; unspecified host compatibility fails closed.
+- [x] Transparent Python/native floating-point DSP preserves headroom above 0 dBFS; only explicit clipper, limiter, and integer conversion stages constrain amplitude.
+- [x] Add transfer/reference tests for gain, polarity, filters/EQ, compressor, gate, clipper, limiter, de-esser, and transient control.
+- [x] Parse extensible WAV channel roles, exclude LFE from loudness, label unknown multichannel layout, add per-band stereo evidence and bounded streaming level/true-peak analysis.
+- [x] Scope analysis history by Song/workspace/source/range/algorithm/settings; add PCM16/24/32/float rendering, explicit TPDF policy, rich receipts, and bounded deterministic mastering optimization.
+- [x] Persist plugin registry/quarantine/mappings, separate module identity from install fingerprint, bind evidence to class/version/binary, and migrate schemas fail-safely.
+- [ ] Native VST3 host remains blocked by absent official SDK and denied official repository access; no metadata-only behavior is promoted to hosting.

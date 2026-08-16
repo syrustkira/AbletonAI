@@ -1,0 +1,10 @@
+{
+  "product": "N0TE",
+  "artifact": "N0TE-Windows-Setup.exe",
+  "installer": "Inno Setup 6",
+  "runtime_input": "EXTERNAL_BUILD_INPUT",
+  "runtime_architectures": ["amd64", "arm64"],
+  "console": false,
+  "signed": false,
+  "authenticode": "EXTERNAL_ACCEPTANCE_PENDING"
+}

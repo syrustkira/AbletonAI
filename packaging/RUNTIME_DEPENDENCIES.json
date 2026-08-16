@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "dependencies": [
+    {"package":"CPython","version":"EXTERNAL_BUILD_INPUT","classification":"REQUIRED_RUNTIME","license":"PSF-2.0","source":"https://www.python.org/","sha256":"EXTERNAL_BUILD_INPUT","redistribution_status":"EXTERNAL_ACCEPTANCE_PENDING"},
+    {"package":"N0TE application modules","version":"1.2.4","classification":"REQUIRED_RUNTIME","license":"GPL-3.0","source":"repository source tree","sha256":"GENERATED_DURING_BUILD","redistribution_status":"approved"},
+    {"package":"ableton-live-mcp Remote Script","version":"70f7df9192b78d9bd9405f369c9e046c88f1610e","classification":"OPTIONAL_RUNTIME","license":"GPL-3.0","source":"https://github.com/bschoepke/ableton-live-mcp","sha256":"PINNED_PAYLOAD_MANIFEST","redistribution_status":"approved"},
+    {"package":"Python unittest","version":"stdlib","classification":"TEST_ONLY","license":"PSF-2.0","source":"CPython stdlib","sha256":"NOT_BUNDLED_SEPARATELY","redistribution_status":"system_with_private_runtime"}
+  ],
+  "external_python_packages_required": []
+}
