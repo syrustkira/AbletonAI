@@ -40,12 +40,15 @@ class CreatorEngine:
    if self.safety.status().get("safe"):raise PermissionError("SAFE prevents public action")
    if not explicit or authority!="user":raise PermissionError("PUBLIC requires explicit user approval")
    p.publication_approved=True
+  elif p.visibility is Visibility.PUBLIC or p.publication_approved:
+   p.publication_approved=False
   p.visibility=visibility;p.revision+=1;self.save(p);return p
  def recipe(self,p,kind:Recipe,sections,marks,*,aspect="9:16",artist_mode=ArtistMode.USE_ARTIST_WORLD):
   if aspect not in self.ASPECTS:raise ValueError("Unsupported aspect")
   chosen=sections[:2] or [{"name":"Song","start":0,"end":30}]
   p.timeline=[TimelineSegment(float(s.get("start",0)),float(s.get("end",30)),"selected_media",str(s.get("name","")),provenance="song_section") for s in chosen]
-  return {"recipe":kind.value,"sections":chosen,"marks":[m.get("id") for m in marks],"media_requirements":["camera or selected media","clean song audio"],"timeline":[asdict(x) for x in p.timeline],"transitions":[x.end for x in p.timeline[:-1]],"caption_placeholder":"Describe the musical change.","aspect":aspect,"target_duration":sum(x.end-x.start for x in p.timeline),"artist_world_mode":artist_mode.value,"evidence":["song sections","explicit MARKs"],"ai_required":False}
+  p.revision+=1;p.publication_approved=False;self.save(p)
+  return {"recipe":kind.value,"sections":chosen,"marks":[m.get("id") for m in marks],"media_requirements":["camera or selected media","clean song audio"],"timeline":[asdict(x) for x in p.timeline],"transitions":[x.end for x in p.timeline[:-1]],"caption_placeholder":"Describe the musical change.","aspect":aspect,"target_duration":sum(x.end-x.start for x in p.timeline),"artist_world_mode":artist_mode.value,"evidence":["song sections","explicit MARKs"],"ai_required":False,"revision":p.revision}
  def add_edit(self,p,index,operation:EditOperation,**params):
   if index<0 or index>=len(p.timeline):raise IndexError("Unknown segment")
-  p.timeline[index].operations.append({"operation":operation.value,"params":params});p.revision+=1;self.save(p)
+  p.timeline[index].operations.append({"operation":operation.value,"params":params});p.revision+=1;p.publication_approved=False;self.save(p)

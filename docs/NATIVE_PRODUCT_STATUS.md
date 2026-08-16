@@ -23,3 +23,11 @@ uses K-weighting and absolute/relative gating but has not passed the official
 conformance vectors, so it is standards-conscious rather than certified.
 True peak uses configurable windowed-sinc interpolation. No processor is marked
 listening accepted or production accepted.
+
+## Post-merge correctness audit
+
+Transparent float stages now preserve internal headroom; clipping is limited to
+explicit clipper/limiter/integer render stages. Native and Python transfer tests
+cover the signal path. VST3 host status remains **NOT IMPLEMENTED**: no official
+SDK exists in the checkout and the official repository was unreachable through
+the build network. PipeWire/JACK/ALSA development inputs are also absent.

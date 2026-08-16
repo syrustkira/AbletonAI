@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import ipaddress
+import json
+import os
+from pathlib import Path
 import urllib.parse
 
 
@@ -23,18 +26,49 @@ class NetworkDecision:
 class NetworkPolicy:
     """Central, fail-closed policy for N0TE-owned outbound connections."""
 
-    mode: NetworkMode = NetworkMode.FULL
+    mode: NetworkMode = NetworkMode.OFFLINE
+    ROUTED_PROVIDER_BASE_ENV = "N0TE_ROUTED_PROVIDER_BASE_URL"
 
     @classmethod
     def from_value(cls, value: object) -> "NetworkPolicy":
         try:
-            return cls(NetworkMode(str(value or "full").strip().lower()))
+            return cls(NetworkMode(str(value or "offline").strip().lower()))
         except ValueError:
             return cls(NetworkMode.OFFLINE)
+
+    @staticmethod
+    def _provider_route_override() -> str:
+        routed = str(os.environ.get(NetworkPolicy.ROUTED_PROVIDER_BASE_ENV) or "").strip()
+        if routed:
+            return routed
+        state = Path(os.environ.get("N0TE_STATE_DIR") or (Path.home() / ".n0te-ableton-ai"))
+        try:
+            config = json.loads((state / "config.json").read_text(encoding="utf-8"))
+            if not isinstance(config, dict):
+                return ""
+        except (OSError, json.JSONDecodeError):
+            return ""
+        provider = str(config.get("ai_provider") or "off").strip().lower()
+        if provider == "ollama":
+            return "http://127.0.0.1:11434/v1"
+        if provider == "gemini":
+            return "https://generativelanguage.googleapis.com/v1beta/openai"
+        if provider == "custom":
+            return str(config.get("ai_base_url") or "").strip()
+        return ""
 
     def decide(self, url: str, *, collaboration: bool = False) -> NetworkDecision:
         parsed = urllib.parse.urlsplit(str(url or ""))
         host = (parsed.hostname or "").lower()
+        # Legacy OpenAI-shaped requests may be routed by the provider switchboard.
+        # Evaluate policy against the actual configured provider destination.
+        if host == "api.openai.com":
+            routed = self._provider_route_override()
+            if routed:
+                candidate = urllib.parse.urlsplit(routed)
+                if candidate.scheme in {"http", "https"} and candidate.hostname:
+                    parsed = candidate
+                    host = (candidate.hostname or "").lower()
         if parsed.scheme not in {"http", "https"} or not host:
             return NetworkDecision(False, "invalid or unsupported network destination")
         loopback = host == "localhost"

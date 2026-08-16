@@ -53,6 +53,7 @@ from n0te_macos import MacOSApplicationDiscovery
 from n0te_media import MockStreamBackend
 from n0te_audio import read_wav, analyze, diagnose
 from n0te_plugins import PluginScanProcess
+from n0te_product import ProductStore, authority_view, capability_health
 import tempfile
 
 APP_VERSION = "1.2.4"
@@ -77,6 +78,7 @@ projects = ProjectStore(STATE)
 intent_router = IntentRouter()
 safety = SafetyController(STATE)
 creator_service = CreatorService(STATE, safety, MockStreamBackend())
+product_store = ProductStore(STATE)
 _mac_metadata = MacOSApplicationDiscovery() if sys.platform == "darwin" else None
 daw_service = DawManagementService(DawDiscoveryService(adapters={"ABLETON_ADAPTER": AdapterInstallation("ABLETON_ADAPTER", True, APP_VERSION, ComponentState.READY, ComponentState.READY, True, False)}, metadata_backend=_mac_metadata), STATE / "first_run.json")
 proposals: dict[str, dict[str, Any]] = {}
@@ -1399,6 +1401,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True, "label": "Detect DAWs", "integrations": daw_service.integrations()})
             if self.path == "/api/setup":
                 return self.send_json({"ok": True, "setup": daw_service.first_run_status(), "integrations": daw_service.integrations()})
+            if self.path == "/api/product":
+                state = product_store.load()
+                return self.send_json({"ok": True, "sessions": state["sessions"],
+                    "ear_decisions": state["ear_decisions"], "versions": state["versions"],
+                    "authority": authority_view(), "health": capability_health({
+                        "core":{"status":"READY"}, "audio_intelligence":{"status":"READY"},
+                        "plugin_registry":{"status":"READY"}, "bridge":{"status":"UNVERIFIED"},
+                        "ark":{"status":"UNAVAILABLE"}})})
             if self.path == "/api/updates":
                 config=load_config(); offline=NetworkPolicy.from_value(config.get("network_mode")).status()["intentional_offline"]
                 return self.send_json({"ok":True,"updates":{"state":"PAUSED_BY_NETWORK_POLICY" if offline else "IDLE","intentional_offline":offline,"channel":config.get("update_channel","STABLE"),"automatic_checking":bool(config.get("automatic_update_checking",True)),"automatic_safe_install":bool(config.get("automatic_safe_install",True)),"release_signature_status":"NOT_CHECKED","pending_components":[],"pending_host_closes":[],"pending_restart":False,"rollback_available":False}})
@@ -1422,6 +1432,18 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok":True,"mode":"OFFLINE_ANALYSIS","report":report,"diagnoses":diagnose(full)})
             if self.path == "/api/plugins/scan":
                 return self.send_json({"ok":True,"scan":PluginScanProcess().scan(plugin_roots(),timeout=15)})
+            if self.path == "/api/product/session":
+                data=self.body_json(); row=product_store.start_session(str(data.get("song_id") or ""),
+                    str(data.get("workspace_id") or ""),str(data.get("mode") or ""),str(data.get("goal") or ""),
+                    str(data.get("exit_condition") or ""),data.get("not_now") or (),str(data.get("bottleneck") or ""),
+                    str(data.get("deliverable") or "")); return self.send_json({"ok":True,"session":row})
+            if self.path == "/api/product/ear-decision":
+                data=self.body_json(); row=product_store.create_ear_decision(str(data.get("song_id") or ""),
+                    str(data.get("workspace_id") or ""),str(data.get("question") or ""),data.get("candidates") or (),
+                    str(data.get("section") or ""),data.get("evidence") or ()); return self.send_json({"ok":True,"ear_decision":row})
+            if self.path == "/api/product/ear-decision/resolve":
+                data=self.body_json(); row=product_store.resolve_ear_decision(str(data.get("id") or ""),
+                    str(data.get("choice") or "")); return self.send_json({"ok":True,"ear_decision":row})
             if self.path == "/api/config":
                 data = self.body_json()
                 if data.get("api_key"):

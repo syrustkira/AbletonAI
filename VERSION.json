@@ -1,7 +1,7 @@
 {
-  "product": "N0TE Ableton AI",
+  "product": "N0TE",
   "version": "1.2.4",
-  "codename": "Creative Coproducer Hardening + Audited macOS Bootstrap",
+  "codename": "Song-Centered Evidence + Product Workflows",
   "upstream": {
     "repo": "bschoepke/ableton-live-mcp",
     "commit": "70f7df9192b78d9bd9405f369c9e046c88f1610e"
@@ -17,13 +17,15 @@
     "DISCOVER",
     "CREATE",
     "TOOLS",
+    "AUDIO",
+    "PLUGINS",
     "COMPARE",
     "FINISH",
     "HISTORY",
     "HEALTH",
     "ENGINEER"
   ],
-  "interaction": "TYPE -> ANALYZE -> CONSULT -> PROPOSE -> IMPLEMENT -> REVIEW -> KEEP/ADJUST/UNDO",
+  "interaction": "MAKE -> UNDERSTAND -> ANALYZE -> COMPARE -> DECIDE -> APPLY -> VERIFY -> REMEMBER -> FINISH -> DELIVER",
   "installers": [
     "macos_bootstrap",
     "python_backend",
@@ -38,5 +40,13 @@
     "signer": "Python Software Foundation (BMM5U3QVKW)",
     "https_certificate_check": true
   },
-  "installer_manifest_schema": 2
+  "installer_manifest_schema": 2,
+  "legacy_product_name": "N0TE Ableton AI",
+  "product_scope": "Song-centered, local-first multi-DAW production system; Ableton is the first DEEP integration",
+  "compatibility": {
+    "persistent_paths": "Legacy N0TE Ableton AI paths remain supported; no destructive rename in 1.2.4",
+    "package_ids": "unchanged",
+    "migration": "staged, non-destructive"
+  },
+  "product_principle": "Automate certainty, expose uncertainty, route taste back to the artist."
 }

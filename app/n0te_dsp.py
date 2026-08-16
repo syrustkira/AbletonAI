@@ -19,7 +19,7 @@ class Gain(Processor):
     def __init__(self, db=0, **kw): super().__init__(**kw);self.db=db
     def process(self,b):
         if self.bypass:return b
-        factor=10**(self.db/20);return self._done(b,([max(-1,min(1,x*factor)) for x in c] for c in b.channels))
+        factor=10**(self.db/20);return self._done(b,([x*factor for x in c] for c in b.channels))
 
 
 class Polarity(Processor):
@@ -70,7 +70,7 @@ class Compressor(Processor):
         attack=math.exp(-1/(max(.01,self.attack_ms)*.001*b.sample_rate));release=math.exp(-1/(max(.01,self.release_ms)*.001*b.sample_rate));env=0.;gain=1.;channels=[[] for _ in b.channels]
         for frame in zip(*b.channels):
             peak=max(map(abs,frame));env=(attack if peak>env else release)*env+(1-(attack if peak>env else release))*peak;db=20*math.log10(max(env,1e-12));reduction=(self.threshold_db+(db-self.threshold_db)/self.ratio-db) if db>self.threshold_db else 0;target=10**((reduction+self.makeup_db)/20);gain=.9*gain+.1*target
-            for i,x in enumerate(frame):channels[i].append(max(-1,min(1,x*gain)))
+            for i,x in enumerate(frame):channels[i].append(x*gain)
         return self._done(b,channels)
 
 
@@ -98,11 +98,13 @@ class Limiter(Processor):
     def __init__(self,ceiling_db=-1,lookahead_ms=5,release_ms=50,**kw):super().__init__(**kw);self.ceiling_db=ceiling_db;self.lookahead_ms=lookahead_ms;self.release_ms=release_ms
     def process(self,b):
         if self.bypass:return b
-        look=max(0,round(self.lookahead_ms*.001*b.sample_rate));self.latency_frames=look;ceiling=10**(self.ceiling_db/20);release=math.exp(-1/(max(.01,self.release_ms)*.001*b.sample_rate));out=[[] for _ in b.channels];gain=1.;frames=list(zip(*b.channels))
+        look=max(0,round(self.lookahead_ms*.001*b.sample_rate));self.latency_frames=look;self.offline_latency_compensated=True;ceiling=10**(self.ceiling_db/20);release=math.exp(-1/(max(.01,self.release_ms)*.001*b.sample_rate));out=[[] for _ in b.channels];gain=1.;frames=list(zip(*b.channels))
+        # Offline rendering can inspect future samples without physically delaying
+        # the output. This is equivalent to compensating the realtime lookahead
+        # latency and, critically, preserves the final lookahead window.
         for i,frame in enumerate(frames):
             future=max((abs(x) for f in frames[i:min(len(frames),i+look+1)] for x in f),default=0);target=min(1,ceiling/future) if future else 1;gain=min(gain,target) if target<gain else release*gain+(1-release)*target
-            delayed=frames[i-look] if i>=look else tuple(0. for _ in frame)
-            for c,x in enumerate(delayed):out[c].append(max(-ceiling,min(ceiling,x*gain)))
+            for c,x in enumerate(frame):out[c].append(max(-ceiling,min(ceiling,x*gain)))
         return self._done(b,out)
 
 
@@ -121,7 +123,7 @@ class TransientProcessor(Processor):
         fast=math.exp(-1/(.003*b.sample_rate));slow=math.exp(-1/(.080*b.sample_rate));fe=se=0.;out=[[] for _ in b.channels]
         for frame in zip(*b.channels):
             peak=max(map(abs,frame));fe=fast*fe+(1-fast)*peak;se=slow*se+(1-slow)*peak;transient=max(0,fe-se)/max(fe,1e-9);factor=max(0,1+self.attack*transient+self.sustain*(1-transient)*.5)
-            for i,x in enumerate(frame):out[i].append(max(-1,min(1,x*factor)))
+            for i,x in enumerate(frame):out[i].append(x*factor)
         return self._done(b,out)
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import asdict,dataclass,field
 from enum import Enum
-from pathlib import Path
+from pathlib import Path,PurePosixPath,PureWindowsPath
 import hashlib,json,shutil,tempfile,time
 from typing import Any
 from n0te_state import atomic_write_json
@@ -23,10 +23,26 @@ def validate_third_party_inventory(items):
 class PrivateRuntimeManifest:version:str;platform:str;architecture:str;payload_path:str;sha256:str;redistribution_status:str
 def validate_private_runtime(runtime:PrivateRuntimeManifest,root:Path):
  if runtime.redistribution_status!="approved":raise PermissionError("Private runtime redistribution is not approved")
- payload=Path(root)/runtime.payload_path
+ payload=_join_under(Path(root),runtime.payload_path,"Private runtime payload")
  if not payload.is_file():raise FileNotFoundError("Private runtime payload is required; offline builds never download it")
  if _hash(payload)!=runtime.sha256:raise ValueError("Private runtime hash mismatch")
  return True
+
+def _safe_relative(value:str,label="payload path"):
+ raw=str(value or "").strip()
+ posix=PurePosixPath(raw.replace("\\","/"));windows=PureWindowsPath(raw)
+ if not raw or raw in {".",".."} or posix.is_absolute() or windows.is_absolute() or ".." in posix.parts:
+  raise ValueError(f"Unsafe {label}: {value}")
+ parts=tuple(part for part in posix.parts if part not in {".",""})
+ if not parts:raise ValueError(f"Unsafe {label}: {value}")
+ return Path(*parts)
+
+def _join_under(root:Path,value:str,label="payload path"):
+ root=Path(root).resolve();candidate=(root/_safe_relative(value,label)).resolve()
+ try:candidate.relative_to(root)
+ except ValueError as exc:raise ValueError(f"Unsafe {label}: {value}") from exc
+ return candidate
+
 class DistributionBuilder:
  EXCLUDED={".git","tests","__pycache__",".coverage"}
  SECRET_NAMES={"api_key","secrets.json","credentials.json"}
@@ -36,11 +52,11 @@ class DistributionBuilder:
   for c in sorted(components,key=lambda x:x.id):
    if c.redistribution_status!="approved":raise PermissionError(f"Unknown redistribution status: {c.id}")
    for f in c.files:
-    src=(self.source/f.source).resolve()
+    src=_join_under(self.source,f.source,"source path");rel=_safe_relative(f.destination,"destination path")
     if any(x in src.parts for x in self.EXCLUDED) or src.name in self.SECRET_NAMES:raise PermissionError(f"Excluded payload: {f.source}")
     if not src.is_file():raise FileNotFoundError(f.source)
     if _hash(src)!=f.sha256:raise ValueError(f"Hash mismatch: {f.source}")
-    dst=payload/c.id/f.destination;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(src,dst)
+    dst=_join_under(payload/c.id,str(rel),"destination path");dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(src,dst)
   manifest={"schema":1,"profile":profile.value,"components":[_component_dict(c) for c in sorted(components,key=lambda x:x.id)],"native_build":{"DMG_BUILD":"EXTERNAL_ACCEPTANCE_PENDING","WINDOWS_EXE_BUILD":"EXTERNAL_ACCEPTANCE_PENDING","SIGNING":"EXTERNAL_ACCEPTANCE_PENDING","NOTARIZATION":"EXTERNAL_ACCEPTANCE_PENDING"}}
   atomic_write_json(out/"distribution.json",manifest);return manifest
 class InstallTransaction:
@@ -58,31 +74,39 @@ class InstallTransaction:
   try:
    for i in sorted(selected):
     for f in items[i]["files"]:
-     src=self.staging/"payload"/i/f["destination"];dst=self.destination/f["destination"]
-     if dst.exists():b=backup/f["destination"];b.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(dst,b)
-     dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(src,dst);changed.append(str(Path(f["destination"])))
+     rel=_safe_relative(f["destination"],"destination path");src=_join_under(self.staging/"payload"/i,str(rel),"staged payload path");dst=_join_under(self.destination,str(rel),"install destination")
+     if dst.exists():b=_join_under(backup,str(rel),"backup destination");b.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(dst,b)
+     dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(src,dst);changed.append(str(rel))
      if _hash(dst)!=f["sha256"]:raise RuntimeError("post-install verification failed")
    receipt={"profile":manifest["profile"],"components":sorted(selected),"files":changed,"backup":str(backup),"installed_at":time.time(),"preserve_user_data":True};atomic_write_json(self.receipt,receipt);return receipt
   except Exception:
    for rel in changed:
-    dst=self.destination/rel;b=backup/rel
-    if b.exists():shutil.copy2(b,dst)
+    dst=_join_under(self.destination,rel,"install destination");b=_join_under(backup,rel,"backup destination")
+    if b.exists():b.parent.mkdir(parents=True,exist_ok=True);dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(b,dst)
     else:dst.unlink(missing_ok=True)
    raise
  def verify(self):
   receipt=json.loads(self.receipt.read_text());manifest=json.loads((self.staging/"distribution.json").read_text());items={x["id"]:x for x in manifest["components"]};bad=[]
   for i in receipt["components"]:
    for f in items[i]["files"]:
-    p=self.destination/f["destination"]
-    if not p.is_file() or _hash(p)!=f["sha256"]:bad.append({"component":i,"file":f["destination"]})
+    rel=_safe_relative(f["destination"],"destination path");p=_join_under(self.destination,str(rel),"install destination")
+    if not p.is_file() or _hash(p)!=f["sha256"]:bad.append({"component":i,"file":str(rel)})
   return bad
  def repair(self):
-  bad=self.verify()
+  bad=self.verify();manifest=json.loads((self.staging/"distribution.json").read_text());components={c["id"]:c for c in manifest["components"]}
   for x in bad:
-   manifest=json.loads((self.staging/"distribution.json").read_text());c=next(c for c in manifest["components"] if c["id"]==x["component"]);f=next(f for f in c["files"] if f["destination"]==x["file"]);dst=self.destination/f["destination"];dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(self.staging/"payload"/c["id"]/f["destination"],dst)
+   c=components[x["component"]];f=next(f for f in c["files"] if str(_safe_relative(f["destination"],"destination path"))==x["file"]);rel=_safe_relative(f["destination"],"destination path");dst=_join_under(self.destination,str(rel),"install destination");dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(_join_under(self.staging/"payload"/c["id"],str(rel),"staged payload path"),dst)
   return {"repaired":bad,"remaining":self.verify(),"preserved_user_data":True}
  def uninstall(self,remove_user_data=False):
-  receipt=json.loads(self.receipt.read_text());[ (self.destination/x).unlink(missing_ok=True) for x in receipt["files"] ];self.receipt.unlink(missing_ok=True);return {"user_data_removed":bool(remove_user_data),"user_data_preserved":not remove_user_data}
+  if remove_user_data:raise PermissionError("Program uninstall does not remove user data; use a separate explicit data-removal workflow")
+  receipt=json.loads(self.receipt.read_text());backup=Path(receipt.get("backup") or "")
+  for raw in receipt["files"]:
+   rel=_safe_relative(raw,"receipt destination");dst=_join_under(self.destination,str(rel),"install destination");old=_join_under(backup,str(rel),"backup destination") if backup else None
+   if old and old.is_file():dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(old,dst)
+   else:dst.unlink(missing_ok=True)
+  self.receipt.unlink(missing_ok=True)
+  if backup and backup.exists():shutil.rmtree(backup,ignore_errors=True)
+  return {"user_data_removed":False,"user_data_preserved":True,"previous_files_restored":True}
 def _hash(path):
  h=hashlib.sha256();h.update(Path(path).read_bytes());return h.hexdigest()
 def _component_dict(c):

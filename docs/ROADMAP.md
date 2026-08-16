@@ -187,3 +187,22 @@ A disposable Set must prove:
 - [x] Expose real offline Audio and isolated Plugins views; close the companion server's remaining direct runtime provider policy check.
 - [ ] Official VST3 SDK ingestion and native VST3/Bridge builds are blocked by absent SDK and denied official-repository access; commercial-plugin and real-host evidence require installations.
 - [ ] Certified loudness vectors, listening acceptance, PipeWire/JACK/ALSA runtime, real AppImage tooling, approved private runtime payloads, and target macOS/Windows builds remain external acceptance.
+
+## Post-merge audio correctness
+
+- [x] Plugin/Core reconnect rejection is atomic and cannot change Song/workspace identity; unspecified host compatibility fails closed.
+- [x] Transparent Python/native floating-point DSP preserves headroom above 0 dBFS; only explicit clipper, limiter, and integer conversion stages constrain amplitude.
+- [x] Add transfer/reference tests for gain, polarity, filters/EQ, compressor, gate, clipper, limiter, de-esser, and transient control.
+- [x] Parse extensible WAV channel roles, exclude LFE from loudness, label unknown multichannel layout, add per-band stereo evidence and bounded streaming level/true-peak analysis.
+- [x] Scope analysis history by Song/workspace/source/range/algorithm/settings; add PCM16/24/32/float rendering, explicit TPDF policy, rich receipts, and bounded deterministic mastering optimization.
+- [x] Persist plugin registry/quarantine/mappings, separate module identity from install fingerprint, bind evidence to class/version/binary, and migrate schemas fail-safely.
+- [ ] Native VST3 host remains blocked by absent official SDK and denied official repository access; no metadata-only behavior is promoted to hosting.
+
+## Song-centered product integration pass
+
+- [x] Persist bounded session goals, exit conditions, not-now guardrails, and evidence-only debriefs through the existing Song event history.
+- [x] Represent universal evidence provenance/privacy, Technical/Creative Twin conflicts, and a durable Ear Decision queue including defer and cannot-tell outcomes.
+- [x] Provide N0TE DSP audition comparison with optional loudness matching while keeping measurement winner separate from artist choice.
+- [x] Derive Mix relationships without treating overlap as a defect, Signal diagnostics with modeled/measured latency labels, and evidence-bound portability plans without fake translation.
+- [x] Connect professional RenderSpecification output authority to delivery receipts, version branches, archive manifests, monitoring context, and capability-granular health.
+- [ ] Real listening acceptance, native VST3/Bridge/ARK execution, and real DAW migration remain dependent on legitimate SDKs, target hosts/platforms, audio devices, and human ears.

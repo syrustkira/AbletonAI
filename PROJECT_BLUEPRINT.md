@@ -275,3 +275,7 @@ See:
 - `BUILD_VALIDATION.md` — automated/real-machine evidence,
 - `HARDENING_AUDIT.md` — known reliability boundaries,
 - `CHANGELOG.md` — version history.
+
+## 17. Certainty, Song twins, and taste authority
+
+N0TE automates certainty, exposes uncertainty, and routes taste back to the artist. The Technical Twin and Creative Twin are provenance-bearing evidence domains attached to one N0TE Song, never competing Song identities. Measurements and DAW facts may support safe automation; inference stays labeled; declared creative intent can block an automatic technical correction; unresolved taste returns to an Ear Decision. One audition preference is an observation, not permanent Artist World doctrine.

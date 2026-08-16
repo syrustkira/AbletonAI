@@ -49,9 +49,12 @@ class PluginSession:
   if h.protocol.major!=self.core_version.major:self.state=CoreConnectionState.INCOMPATIBLE;return set()
   self.song_id=h.song_id;self.workspace_id=h.workspace_id;self.state=CoreConnectionState.READY;return self.features & h.features
  def reconnect(self,h):
-  old=(self.song_id,self.workspace_id);features=self.negotiate(h)
-  if old!=("","") and old!=(self.song_id,self.workspace_id):raise PermissionError("Reconnect cannot change Song/workspace binding")
-  return features
+  old=(self.song_id,self.workspace_id);old_state=self.state
+  if old!=("","") and old!=(h.song_id,h.workspace_id):raise PermissionError("Reconnect cannot change Song/workspace binding")
+  if h.protocol.major!=self.core_version.major:
+   self.state=old_state
+   return set()
+  return self.negotiate(h)
 class IntegrationTier(str,Enum):DETECTED_UNSUPPORTED="DETECTED_UNSUPPORTED";GENERIC="GENERIC";ENHANCED="ENHANCED";DEEP="DEEP"
 class CompatibilityState(str,Enum):
  VERIFIED="VERIFIED";ASSUMED_COMPATIBLE="ASSUMED_COMPATIBLE";NEEDS_REVALIDATION="NEEDS_REVALIDATION";KNOWN_INCOMPATIBLE="KNOWN_INCOMPATIBLE";UNAVAILABLE="UNAVAILABLE"
@@ -60,7 +63,7 @@ class OperationRisk(str,Enum):READ="READ";OBSERVE="OBSERVE";MUTATE="MUTATE"
 class CapabilityRequirement:capability_id:str;risk:OperationRisk=OperationRisk.OBSERVE
 @dataclass
 class HostCapabilityDescriptor:
- capability_id:str;supported:bool;integration_depth:IntegrationTier;runtime_state:ComponentState;implementation_id:str;evidence:str="UNKNOWN";reason:str="";last_verified:float=0;fallback_candidates:list[str]=field(default_factory=list);authority_requirements:set[str]=field(default_factory=set);host_extensions:dict[str,Any]=field(default_factory=dict);adapter_version:str="";host_family:str="";host_version:str="";platform:str="";architecture:str="";protocol_version:str="";compatibility:CompatibilityState=CompatibilityState.VERIFIED
+ capability_id:str;supported:bool;integration_depth:IntegrationTier;runtime_state:ComponentState;implementation_id:str;evidence:str="UNKNOWN";reason:str="";last_verified:float=0;fallback_candidates:list[str]=field(default_factory=list);authority_requirements:set[str]=field(default_factory=set);host_extensions:dict[str,Any]=field(default_factory=dict);adapter_version:str="";host_family:str="";host_version:str="";platform:str="";architecture:str="";protocol_version:str="";compatibility:CompatibilityState=CompatibilityState.NEEDS_REVALIDATION
  def eligible(self,risk=OperationRisk.OBSERVE):
   compatible={CompatibilityState.VERIFIED} if risk is OperationRisk.MUTATE else {CompatibilityState.VERIFIED,CompatibilityState.ASSUMED_COMPATIBLE}
   return self.supported and self.runtime_state in {ComponentState.READY,ComponentState.BUSY} and self.compatibility in compatible

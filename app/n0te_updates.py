@@ -12,7 +12,7 @@ class UpdateState(str,Enum):
 class UpdateChannel(str,Enum):STABLE="STABLE";BETA="BETA";DEVELOPER="DEVELOPER"
 @dataclass
 class UpdateSettings:
- automatic_checking:bool=True;automatic_safe_install:bool=True;channel:UpdateChannel=UpdateChannel.STABLE
+ automatic_checking:bool=False;automatic_safe_install:bool=False;channel:UpdateChannel=UpdateChannel.STABLE
  def select_channel(self,channel,explicit=False):
   channel=UpdateChannel(channel)
   if channel is not UpdateChannel.STABLE and not explicit:raise PermissionError("Beta and Developer channels require explicit opt-in")
@@ -45,6 +45,7 @@ class UpdateEngine:
  def validate_manifest(self,manifest):
   if manifest.signature_required and (not manifest.signature or not self.verifier.verify(manifest_bytes(manifest),manifest.signature)):raise PermissionError("Invalid or missing release signature")
   if manifest.channel is not self.settings.channel:raise ValueError("Release channel does not match configured channel")
+  if not manifest.rollback_compatible:raise ValueError("Release is not rollback-compatible; automatic transactional installation is refused")
   if manifest.minimum_core_version and _version(self.current.get("CORE","0"))<_version(manifest.minimum_core_version):raise ValueError("Incompatible Core")
   for item in manifest.components:
    if item.component_id not in self.KNOWN_COMPONENTS:raise ValueError("Unknown component")
@@ -109,12 +110,12 @@ class UpdateEngine:
  def status(self):return {"state":self.state.value,"channel":self.settings.channel.value,"automatic_checking":self.settings.automatic_checking,"automatic_safe_install":self.settings.automatic_safe_install,"last_successful_check":self.last_check,"network_permission":self.policy.status(),"available_release":self.manifest.release_version if self.manifest else "","pending_components":[x.component_id for x in self.plan],"pending_host_close":self.state is UpdateState.PENDING_HOST_CLOSE,"pending_restart":self.state is UpdateState.PENDING_RESTART,"rollback_available":(self.state_dir/"rollback.json").exists(),"signature_status":"VERIFIED" if self.manifest else "NOT_CHECKED","song_id":self.song_id}
 def _manifest_from_dict(raw):
  components=[UpdateComponent(**x) for x in raw["components"]];return ReleaseManifest(**{**raw,"channel":UpdateChannel(raw["channel"]),"components":components})
-def prepare_macos_handoff(path:Path,current_app:Path,staged_app:Path,backup_app:Path,pid:int,timeout=30):
+def prepare_macos_handoff(path:Path,current_app:Path,staged_app:Path,backup_app:Path,pid:int,timeout=30,health_url="http://127.0.0.1:8766/api/status"):
  current_app,staged_app,backup_app=map(lambda x:Path(x).resolve(),(current_app,staged_app,backup_app))
  if current_app==staged_app or any(not x.name.endswith('.app') for x in (current_app,staged_app,backup_app)):raise ValueError("Safe .app paths required")
  hashes={str(x.relative_to(staged_app)):hashlib.sha256(x.read_bytes()).hexdigest() for x in sorted(staged_app.rglob('*')) if x.is_file()}
  if not hashes:raise ValueError("Staged application is empty")
- handoff={"schema":1,"current_app":str(current_app),"staged_app":str(staged_app),"backup_app":str(backup_app),"pid":int(pid),"timeout":float(timeout),"bundle_hashes":hashes,"creative_state_untouched":True}
+ handoff={"schema":2,"current_app":str(current_app),"staged_app":str(staged_app),"backup_app":str(backup_app),"pid":int(pid),"timeout":float(timeout),"bundle_hashes":hashes,"health_url":str(health_url),"creative_state_untouched":True}
  atomic_write_json(Path(path),handoff);return handoff
 def _version(value):
  parts=[]
