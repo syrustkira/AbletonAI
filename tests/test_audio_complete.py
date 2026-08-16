@@ -60,6 +60,10 @@ class AudioCompleteTests(unittest.TestCase):
    history=AnalysisHistory(Path(tmp)/'history.json');buffer=tone();report=analyze(buffer);history.record('song-a','workspace-a',buffer,report,{'fft':1024})
    valid=AnalysisKey.create('song-a','workspace-a',buffer,{'fft':1024},report['algorithm_version']);self.assertIsNotNone(history.current_for(valid))
    for key in (AnalysisKey.create('song-b','workspace-a',buffer,{'fft':1024},report['algorithm_version']),AnalysisKey.create('song-a','workspace-b',buffer,{'fft':1024},report['algorithm_version']),AnalysisKey.create('song-a','workspace-a',AudioBuffer(buffer.sample_rate,buffer.channels,buffer.source,(0,1),buffer.metadata),{'fft':1024},report['algorithm_version']),AnalysisKey.create('song-a','workspace-a',buffer,{'fft':2048},report['algorithm_version']),AnalysisKey.create('song-a','workspace-a',buffer,{'fft':1024},'audio-next')):self.assertIsNone(history.current_for(key))
+ def test_ranged_analysis_key_survives_json_round_trip(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   base=tone();ranged=AudioBuffer(base.sample_rate,base.channels,'range.wav',(0.25,0.75),{'source_sha256':'range-hash'});report=analyze(ranged);path=Path(tmp)/'history.json';AnalysisHistory(path).record('song','workspace',ranged,report,{'fft':1024})
+   key=AnalysisKey.create('song','workspace',ranged,{'fft':1024},report['algorithm_version']);self.assertIsNotNone(AnalysisHistory(path).current_for(key))
  def test_professional_render_formats_dither_and_receipt(self):
   with tempfile.TemporaryDirectory() as tmp:
    source=Path(tmp)/'source.wav';write_wav(source,tone(),RenderSpecification(8000,Encoding.FLOAT32));buffer=read_wav(source)
@@ -75,4 +79,8 @@ class AudioCompleteTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    path=Path(tmp)/'long.wav';write_wav(path,tone(seconds=4),RenderSpecification(8000,Encoding.PCM24));streamed=stream_levels_wav(path,257);full=levels(read_wav(path))
    self.assertAlmostEqual(streamed['sample_peak'],full['sample_peak'],places=6);self.assertAlmostEqual(streamed['rms'],full['rms'],places=6);self.assertLess(streamed['memory_bound_bytes'],10000);self.assertIn('gated_loudness',streamed['deferred_metrics'])
+ def test_streaming_level_scan_rejects_truncated_declared_data(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   path=Path(tmp)/'truncated.wav';wav(path,1,16,[.1,.2,.3,.4]);raw=bytearray(path.read_bytes());offset=raw.index(b'data');declared=struct.unpack_from('<I',raw,offset+4)[0];struct.pack_into('<I',raw,offset+4,declared+64);path.write_bytes(raw)
+   with self.assertRaisesRegex(ValueError,'Truncated WAVE data chunk'):stream_levels_wav(path,2)
 if __name__=="__main__":unittest.main()
