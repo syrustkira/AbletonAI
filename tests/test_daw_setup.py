@@ -66,7 +66,7 @@ class DawSetupTests(unittest.TestCase):
             self.assertFalse(config["automatic_update_checking"])
             self.assertFalse(config["automatic_safe_install"])
 
-    def test_first_run_never_overwrites_existing_runtime_choices(self):
+    def test_first_run_preserves_explicit_choices_and_fills_missing_safe_keys(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             existing = {
@@ -74,11 +74,28 @@ class DawSetupTests(unittest.TestCase):
                 "network_mode": "full",
                 "community_enabled": True,
                 "automatic_update_checking": True,
+                "custom_setting": "keep-me",
             }
             (root / "config.json").write_text(json.dumps(existing), encoding="utf-8")
             detector = DawDiscoveryService([root], platform_name="darwin")
             FirstRunService(root / "first_run.json", detector)
-            self.assertEqual(json.loads((root / "config.json").read_text(encoding="utf-8")), existing)
+            config = json.loads((root / "config.json").read_text(encoding="utf-8"))
+            for key, value in existing.items():
+                self.assertEqual(config[key], value)
+            self.assertFalse(config["automatic_safe_install"])
+
+    def test_corrupt_runtime_config_is_preserved_and_replaced_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "config.json").write_bytes(b"{broken")
+            detector = DawDiscoveryService([root], platform_name="darwin")
+            FirstRunService(root / "first_run.json", detector)
+            config = json.loads((root / "config.json").read_text(encoding="utf-8"))
+            self.assertEqual(config["ai_provider"], "off")
+            self.assertEqual(config["network_mode"], "offline")
+            recovery = list((root / "Recovery").glob("config-corrupt-*.json"))
+            self.assertEqual(len(recovery), 1)
+            self.assertEqual(recovery[0].read_bytes(), b"{broken")
 
     def test_explicit_offline_first_run_choice_updates_runtime_config(self):
         with tempfile.TemporaryDirectory() as td:
