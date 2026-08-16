@@ -109,6 +109,7 @@ class ServerRouteCharacterizationTests(unittest.TestCase):
 
     def test_chat_provider_transport_failure_is_visible_as_service_unavailable(self):
         with patch.object(server, "get_snapshot", return_value=SNAPSHOT), \
+                patch.object(server, "load_config", return_value={"ai_provider": "openai", "network_mode": "full"}), \
                 patch.object(server, "ask_openai", side_effect=urllib.error.URLError("provider offline")):
             status, _, body = self._request("POST", "/api/chat", b'{"message":"What should I do?"}')
         payload = json.loads(body)
@@ -122,6 +123,7 @@ class ServerRouteCharacterizationTests(unittest.TestCase):
         projects = Mock()
         projects.song_key.return_value = "song-key"
         with patch.object(server, "get_snapshot", return_value=SNAPSHOT), \
+                patch.object(server, "load_config", return_value={"ai_provider": "openai", "network_mode": "full"}), \
                 patch.object(server, "ask_openai", return_value=reply), \
                 patch.object(server, "projects", projects), \
                 patch.object(server, "proposals", registry):
