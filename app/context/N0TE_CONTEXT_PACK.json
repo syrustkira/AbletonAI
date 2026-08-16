@@ -175,7 +175,13 @@
       "memory": "Stored context may be stale and must not silently override newer evidence.",
       "inference": "AI inference stays labeled as inference."
     },
-    "transaction_rule": "Every N0TE mutation belongs to one verifiable song/Set; Apply revalidates; Undo fails closed if ownership or affected-target safety cannot be proven."
+    "transaction_rule": "Every N0TE mutation belongs to one verifiable song/Set; Apply revalidates; Undo fails closed if ownership or affected-target safety cannot be proven.",
+    "certainty_principle": "N0TE automates certainty, exposes uncertainty, and routes taste back to the artist.",
+    "song_twins": {
+      "technical": "measured/observed project, audio, dependency and capability evidence",
+      "creative": "user-declared intent, protected qualities, decisions and cautiously matured taste evidence",
+      "law": "They are evidence domains on one Song; creative conflicts prevent silent technical correction."
+    }
   },
   "views": {
     "NOW": "Primary conversation cockpit: current goal, selection, bottleneck, next action, not-now guardrails, Apply/Undo.",
@@ -212,7 +218,8 @@
     "Rollback failure stops without blind native Undo",
     "Finish view refuses to claim bounce readiness before audio preflight exists",
     "Deterministic offline audio measurement, cautious diagnosis, preview-only gain correction, plugin metadata isolation, and cross-platform state paths are fixture-validated; these do not prove realtime, listening, DAW, or commercial-plugin acceptance",
-    "Offline multiformat audio analysis, gated K-weighted loudness, true peak, FFT/STFT, reference/stem comparison, N0TE DSP previews, explicit external rendering, Linux product discovery, and native C DSP/ring tests are implemented without promoting real DAW or listening acceptance"
+    "Offline multiformat audio analysis, gated K-weighted loudness, true peak, FFT/STFT, reference/stem comparison, N0TE DSP previews, explicit external rendering, Linux product discovery, and native C DSP/ring tests are implemented without promoting real DAW or listening acceptance",
+    "Portable Song product workflows: bounded sessions/debriefs, provenance/privacy evidence, ear decisions, audition comparison, relationship analysis, signal diagnostics, portability, delivery receipts, version trees, monitoring context, and capability-granular health."
   ],
   "next_layers": [
     "Complete the Gate 1 disposable real-Live acceptance checklist and record the evidence; implementation hardening is complete but SONG-READY remains unproven until this succeeds.",
@@ -227,7 +234,8 @@
     "Optional Extensions SDK adapter later without changing coproducer logic",
     "Complete real AudioTap/Bridge capture acceptance; deterministic offline audio metrics, rendering and bounded mastering optimization are already implemented.",
     "Ingest the legitimate official VST3 SDK, then build and prove the native host with a legal test module before commercial-plugin characterization.",
-    "Validate loudness against official conformance material and complete human listening/benchmark acceptance; numeric validation is not artistic acceptance."
+    "Validate loudness against official conformance material and complete human listening/benchmark acceptance; numeric validation is not artistic acceptance.",
+    "Connect remaining derived workflows to richer UI drawers and real DAW/audio backends only as capabilities are verified; no empty or fake realtime views."
   ],
   "non_goals": [
     "Do not maximize raw Ableton command count as a product goal.",

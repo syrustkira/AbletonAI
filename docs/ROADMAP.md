@@ -197,3 +197,12 @@ A disposable Set must prove:
 - [x] Scope analysis history by Song/workspace/source/range/algorithm/settings; add PCM16/24/32/float rendering, explicit TPDF policy, rich receipts, and bounded deterministic mastering optimization.
 - [x] Persist plugin registry/quarantine/mappings, separate module identity from install fingerprint, bind evidence to class/version/binary, and migrate schemas fail-safely.
 - [ ] Native VST3 host remains blocked by absent official SDK and denied official repository access; no metadata-only behavior is promoted to hosting.
+
+## Song-centered product integration pass
+
+- [x] Persist bounded session goals, exit conditions, not-now guardrails, and evidence-only debriefs through the existing Song event history.
+- [x] Represent universal evidence provenance/privacy, Technical/Creative Twin conflicts, and a durable Ear Decision queue including defer and cannot-tell outcomes.
+- [x] Provide N0TE DSP audition comparison with optional loudness matching while keeping measurement winner separate from artist choice.
+- [x] Derive Mix relationships without treating overlap as a defect, Signal diagnostics with modeled/measured latency labels, and evidence-bound portability plans without fake translation.
+- [x] Connect professional RenderSpecification output authority to delivery receipts, version branches, archive manifests, monitoring context, and capability-granular health.
+- [ ] Real listening acceptance, native VST3/Bridge/ARK execution, and real DAW migration remain dependent on legitimate SDKs, target hosts/platforms, audio devices, and human ears.

@@ -7,7 +7,7 @@
 - UI JavaScript syntax: **PASS**
 - JSON parsing: **PASS**
 - UI endpoint/backend consistency: **PASS**
-- unit/regression/lifecycle tests: **245 PASS**, including atomic reconnect identity, fail-closed compatibility defaults, floating-point headroom, DSP transfer references, channel-layout-aware loudness, bounded streaming levels/true peak, scoped analysis history, professional rendering/dither, iterative mastering, and durable plugin identity/quarantine
+- unit/regression/lifecycle tests: **258 PASS**, including atomic reconnect identity, fail-closed compatibility defaults, floating-point headroom, DSP transfer references, channel-layout-aware loudness, bounded streaming levels/true peak, scoped analysis history, professional rendering/dither, iterative mastering, and durable plugin identity/quarantine
 - local companion-server smoke test without Ableton: **PASS**; UI returns HTTP 200 and `/api/status` retains app/config/context metadata while reporting the Ableton bridge offline
 
 - Reproducible coverage: **PASS**; real-Live acceptance remains mandatory
@@ -109,3 +109,7 @@ The provider switchboard is transport-only. Gemini uses native structured output
 The **Ableton Gate 1 safety scope is implementation complete / real-Live acceptance pending**. The wider N0TE product remains partially implemented; this is not a SONG-READY or whole-product-complete claim. The canonical next acceptance target is the disposable-Set checklist in `CODEX_SONG_READY_HANDOFF.md`.
 
 Reproducible dependency-free statement-coverage command: `bash scripts/coverage.sh`.
+
+## Song-centered product workflow validation
+
+The portable product layer now persists session operating goals and evidence-only debriefs, distinguishes provenance/privacy and technical/creative evidence, queues unresolved ear decisions, creates loudness-matched offline audition comparisons without choosing taste, derives non-prescriptive Mix and Signal evidence, produces truthful portability plans, and connects delivery authority to existing professional render receipts. Automated validation covers persistence, no-overwrite/output authority, version branches, cautious taste maturity, modeled-versus-measured labels, and capability-scoped health. Native VST3, Bridge, ARK, real DAW migration, and listening acceptance remain explicitly unverified.

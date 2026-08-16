@@ -457,6 +457,42 @@
       "ableton": "Offline analysis and metadata discovery remain distinct from realtime/host execution",
       "n0te_role": "local WAV analysis and isolated standard-location plugin scanning exposed through companion UI/API",
       "status": "implemented"
+    },
+    {
+      "feature": "Song Technical Twin / Creative Twin",
+      "ableton": "Project state only; creative intent is not a durable evidence domain",
+      "n0te_role": "derive two evidence lenses on one Song and refuse automatic correction when declared intent conflicts",
+      "status": "n0te_core"
+    },
+    {
+      "feature": "Universal evidence and ear decisions",
+      "ableton": "not provided",
+      "n0te_role": "preserve provenance/privacy; separate facts, measurements, inference, modeled values, and artist taste decisions",
+      "status": "n0te_core"
+    },
+    {
+      "feature": "Session operating view and deterministic debrief",
+      "ableton": "session activity exists without Song-level goal ledger",
+      "n0te_role": "persist goal, exit condition, guardrails and evidence-only debrief",
+      "status": "n0te_core"
+    },
+    {
+      "feature": "Audition Lab and Mix relationships",
+      "ableton": "manual A/B and mixer workflows",
+      "n0te_role": "loudness-matched offline candidates, technical comparison, and independent artist choice; overlap is not automatically a problem",
+      "status": "n0te_additive"
+    },
+    {
+      "feature": "Song portability assessment",
+      "ableton": "host project format",
+      "n0te_role": "evidence-bound migration plan without claiming cross-host translation",
+      "status": "n0te_core"
+    },
+    {
+      "feature": "Delivery and archive evidence",
+      "ableton": "export UI",
+      "n0te_role": "explicit output authority, RenderSpecification receipts, version relationship, and reconstruction manifest",
+      "status": "n0te_additive"
     }
   ],
   "hardening_status": "Runtime claims must distinguish implemented, structural candidate, and planned/audio-unverified behavior.",

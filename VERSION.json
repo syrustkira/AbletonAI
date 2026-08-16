@@ -1,7 +1,7 @@
 {
   "product": "N0TE",
   "version": "1.2.4",
-  "codename": "Audio Correctness + Gate 1 Real-Live Acceptance",
+  "codename": "Song-Centered Evidence + Product Workflows",
   "upstream": {
     "repo": "bschoepke/ableton-live-mcp",
     "commit": "70f7df9192b78d9bd9405f369c9e046c88f1610e"
@@ -25,7 +25,7 @@
     "HEALTH",
     "ENGINEER"
   ],
-  "interaction": "TYPE -> ANALYZE -> CONSULT -> PROPOSE -> IMPLEMENT -> REVIEW -> KEEP/ADJUST/UNDO",
+  "interaction": "MAKE -> UNDERSTAND -> ANALYZE -> COMPARE -> DECIDE -> APPLY -> VERIFY -> REMEMBER -> FINISH -> DELIVER",
   "installers": [
     "macos_bootstrap",
     "python_backend",
@@ -47,5 +47,6 @@
     "persistent_paths": "Legacy N0TE Ableton AI paths remain supported; no destructive rename in 1.2.4",
     "package_ids": "unchanged",
     "migration": "staged, non-destructive"
-  }
+  },
+  "product_principle": "Automate certainty, expose uncertainty, route taste back to the artist."
 }
