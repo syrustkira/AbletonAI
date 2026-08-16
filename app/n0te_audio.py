@@ -114,12 +114,17 @@ def stream_levels_wav(path,chunk_frames=65536):
             elif name==b'data':data_offset=start;data_size=size;break
             handle.seek(start+size+(size&1))
         if fmt is None or data_offset is None:raise ValueError("WAVE requires fmt and data chunks")
+        if len(fmt)<16:raise ValueError("Truncated WAVE format")
         tag,count,rate,_,align,bits=struct.unpack_from('<HHIIHH',fmt)
         if tag==0xfffe and len(fmt)>=40:tag=struct.unpack_from('<H',fmt,24)[0]
-        if (tag,bits) not in {(1,16),(1,24),(1,32),(3,32)}:raise ValueError("Unsupported streaming WAVE encoding")
-        width=bits//8;handle.seek(data_offset);remaining=data_size;total=0;squares=0.;summed=0.;peak=0.;overs=0;true=0.;tail=[[] for _ in range(count)]
+        width=bits//8
+        if (tag,bits) not in {(1,16),(1,24),(1,32),(3,32)} or not count or align!=count*width:raise ValueError("Unsupported streaming WAVE encoding")
+        if data_size%align:raise ValueError("Truncated WAVE frame")
+        handle.seek(data_offset);remaining=data_size;total=0;squares=0.;summed=0.;peak=0.;overs=0;true=0.;tail=[[] for _ in range(count)]
         while remaining:
-            block=handle.read(min(remaining,chunk_frames*align));remaining-=len(block);frames=len(block)//align;channels=[[] for _ in range(count)]
+            requested=min(remaining,chunk_frames*align);block=handle.read(requested)
+            if len(block)!=requested:raise ValueError("Truncated WAVE data chunk")
+            remaining-=len(block);frames=len(block)//align;channels=[[] for _ in range(count)]
             for frame in range(frames):
                 for channel in range(count):
                     sample=block[frame*align+channel*width:frame*align+(channel+1)*width]
