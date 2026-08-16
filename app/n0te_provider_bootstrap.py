@@ -1,11 +1,29 @@
 """Explicit provider-router bootstrap for the supported packaged application."""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
 
+from n0te_state import atomic_write_json
+
 _BOOTSTRAPPED = False
+_SAFE_DEFAULTS = {
+    "ai_provider": "off",
+    "network_mode": "offline",
+    "community_enabled": False,
+    "automatic_update_checking": False,
+    "automatic_safe_install": False,
+}
+
+
+def _seed_safe_config(config_path: Path) -> None:
+    """Make a first-ever packaged launch fail closed before provider routing starts."""
+    if config_path.exists():
+        return
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(config_path, dict(_SAFE_DEFAULTS))
 
 
 def install_for_application(*, start_switchboard: bool = True) -> None:
@@ -25,6 +43,7 @@ def install_for_application(*, start_switchboard: bool = True) -> None:
     provider.STATE = state
     provider.CONFIG_PATH = state / "config.json"
     provider.SECRET_PATH = state / "secrets.json"
+    _seed_safe_config(provider.CONFIG_PATH)
     install_gemini_native(provider)
     placeholder = "n0te-provider-router"
 
@@ -33,6 +52,9 @@ def install_for_application(*, start_switchboard: bool = True) -> None:
         provider_name = str(active_provider or config.get("provider") or "off").lower()
         current = str(os.environ.get("OPENAI_API_KEY") or "")
         if provider_name == "openai":
+            if current == placeholder:
+                os.environ.pop("OPENAI_API_KEY", None)
+        elif provider_name == "off":
             if current == placeholder:
                 os.environ.pop("OPENAI_API_KEY", None)
         elif not current:
