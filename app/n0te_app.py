@@ -5,10 +5,12 @@ from pathlib import Path
 from n0te_app_health import startup_health
 from n0te_instance import AlreadyRunningError,SingleInstance
 from n0te_paths import migrate_legacy_macos,product_paths
+from n0te_provider_bootstrap import install_for_application
 
 def main():
- paths=product_paths().ensure();migrate_legacy_macos(paths)
+ paths=product_paths();migrate_legacy_macos(paths);paths.ensure()
  os.environ.setdefault("N0TE_STATE_DIR",str(paths.data));os.environ.setdefault("N0TE_LOG_DIR",str(paths.logs));os.environ.setdefault("N0TE_CACHE_DIR",str(paths.cache))
+ install_for_application()
  lock=SingleInstance(paths.data/"n0te.lock")
  bundle=os.environ.get("N0TE_APP_BUNDLE")
  if bundle:
